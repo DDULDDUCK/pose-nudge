@@ -1,4 +1,11 @@
-use tauri::{Manager, AppHandle, Emitter};
+// main.rs
+
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
+
+use tauri::{AppHandle, Emitter, Manager};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::time::interval;
@@ -15,6 +22,7 @@ struct PostureAlert {
     timestamp: u64,
 }
 
+// AppState 구조체는 변경할 필요 없습니다.
 struct AppState {
     pose_analyzer: Arc<PoseAnalyzer>,
     monitoring_active: Arc<Mutex<bool>>,
@@ -24,6 +32,8 @@ struct AppState {
     power_save_mode: Arc<Mutex<bool>>,
 }
 
+// --- 모든 tauri::command 함수들은 변경할 필요가 없습니다. ---
+// (생략 - 기존 코드와 동일)
 #[tauri::command]
 async fn initialize_pose_model(state: tauri::State<'_, AppState>) -> Result<(), String> {
     info!("Pose 모델 초기화 시작");
@@ -109,33 +119,25 @@ async fn analyze_pose_data(
     state: tauri::State<'_, AppState>,
     image_data: String,
 ) -> Result<String, String> {
-    // 분석 주기 확인 (전력 절약을 위해)
-    if !state.pose_analyzer.should_analyze() {
-        return Ok(r#"{"skip": true}"#.to_string());
-    }
     
     state.pose_analyzer.mark_analysis_time();
     
     match state.pose_analyzer.analyze_image_sync(&image_data) {
         Ok(result_str) => {
-            // 결과 파싱하여 알림 처리
             let result: serde_json::Value = serde_json::from_str(&result_str)
                 .map_err(|e| format!("결과 파싱 실패: {}", e))?;
             
-            // 거북목 감지 시 알림
             if let Some(turtle_neck) = result.get("turtle_neck").and_then(|v| v.as_bool()) {
                 if turtle_neck {
                     let mut last_alert = state.last_alert_time.lock().unwrap();
-                    let mut alert_messages = state.alert_messages.lock().unwrap();
-                    
                     if last_alert.elapsed() >= Duration::from_secs(30) {
+                        let mut alert_messages = state.alert_messages.lock().unwrap();
                         alert_messages.push("거북목이 감지되었습니다. 목을 곧게 펴주세요!".to_string());
                         *last_alert = Instant::now();
                     }
                 }
             }
             
-            // 어깨 정렬 불량 시 알림
             if let Some(shoulder_misalignment) = result.get("shoulder_misalignment").and_then(|v| v.as_bool()) {
                 if shoulder_misalignment {
                     let mut alert_messages = state.alert_messages.lock().unwrap();
@@ -167,7 +169,7 @@ fn get_pose_recommendations() -> Result<Vec<String>, String> {
 fn get_alert_messages(state: tauri::State<'_, AppState>) -> Result<Vec<String>, String> {
     let mut alert_messages = state.alert_messages.lock().unwrap();
     let messages = alert_messages.clone();
-    alert_messages.clear(); // 메시지를 읽은 후 클리어
+    alert_messages.clear();
     Ok(messages)
 }
 
@@ -191,9 +193,9 @@ fn test_model_status(state: tauri::State<'_, AppState>) -> Result<String, String
     Ok(result)
 }
 
-// 백그라운드 모니터링 태스크
+// 백그라운드 모니터링 태스크는 변경할 필요 없습니다.
 async fn background_monitoring_task(app_handle: AppHandle, state: Arc<AppState>) {
-    let mut interval = interval(Duration::from_secs(30)); // 30초마다 체크
+    let mut interval = interval(Duration::from_secs(30));
     
     loop {
         interval.tick().await;
@@ -203,11 +205,8 @@ async fn background_monitoring_task(app_handle: AppHandle, state: Arc<AppState>)
             continue;
         }
         
-        // 백그라운드에서 자세 체크 로직
-        // 실제로는 카메라를 주기적으로 활성화하고 빠르게 분석 후 비활성화
         info!("백그라운드 자세 체크 수행");
         
-        // 알림이 있으면 프론트엔드에 전송
         let messages = {
             let mut alert_messages = state.alert_messages.lock().unwrap();
             if !alert_messages.is_empty() {
@@ -236,6 +235,8 @@ pub fn run() {
     env_logger::init();
     
     tauri::Builder::default()
+        // ★★★ 이 부분에 Store 플러그인을 추가합니다. ★★★
+        .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
@@ -244,7 +245,7 @@ pub fn run() {
             let background_monitoring = Arc::new(Mutex::new(false));
             let last_alert_time = Arc::new(Mutex::new(Instant::now()));
             let alert_messages = Arc::new(Mutex::new(Vec::new()));
-            let power_save_mode = Arc::new(Mutex::new(true)); // 기본적으로 전력 절약 모드 활성화
+            let power_save_mode = Arc::new(Mutex::new(true));
 
             let state = Arc::new(AppState {
                 pose_analyzer,
@@ -264,7 +265,6 @@ pub fn run() {
                 power_save_mode: state.power_save_mode.clone(),
             });
 
-            // 백그라운드 모니터링 태스크를 async setup으로 시작
             let app_handle = app.handle().clone();
             let state_clone = state.clone();
             tauri::async_runtime::spawn(async move {

@@ -57,7 +57,8 @@ pub struct PoseAnalyzer {
     recent_shoulder_results: Mutex<VecDeque<bool>>,
     temporal_window_size: usize, // 몇 개의 프레임을 기준으로 판단할지
     temporal_threshold_count: usize, // window_size 중 몇 개 이상일 때 true로 판단할지
-    baseline_face_shoulder_ratio: Mutex<Option<f32>>, 
+    baseline_face_shoulder_ratio: Mutex<Option<f32>>,
+    baseline_shoulder_alignment: Mutex<Option<f32>>, // 기준 어깨 기울기
 }
 
 impl PoseAnalyzer {
@@ -82,6 +83,7 @@ impl PoseAnalyzer {
             temporal_window_size: WINDOW_SIZE,
             temporal_threshold_count: THRESHOLD_COUNT,
             baseline_face_shoulder_ratio: Mutex::new(None),
+            baseline_shoulder_alignment: Mutex::new(None),
         }
     }
 
@@ -182,7 +184,7 @@ impl PoseAnalyzer {
 
     // 분석 주기 확인
     pub fn should_analyze(&self) -> bool {
-        // 전력 절약 모드가 비활성화되어 있으면 항상 분석 허용
+        // 적응형 모드가 비활성화되어 있으면 항상 분석을 허용합니다.
         if !*self.adaptive_mode.lock() {
             return true;
         }
@@ -190,6 +192,7 @@ impl PoseAnalyzer {
         let last_time = *self.last_analysis_time.lock();
         let interval = *self.analysis_interval.lock();
         
+        // 마지막 분석 시간으로부터 설정된 간격이 지났는지 확인합니다.
         last_time.elapsed().as_millis() >= interval as u128
     }
 
@@ -248,42 +251,46 @@ impl PoseAnalyzer {
         let image_data = self.decode_base64_image(base64_data)?;
         let keypoints = self.extract_pose_keypoints(&image_data)?;
         
+            // 1. "현재 프레임"의 자세를 실시간으로 분석합니다.
         let current_turtle_neck = self.detect_turtle_neck(&keypoints);
         let current_shoulder_misalignment = self.detect_shoulder_misalignment(&keypoints);
 
+        // 2. 이 "실시간" 결과를 사용하여 "실시간 점수"를 계산합니다.
+        let realtime_posture_score = self.calculate_posture_score(current_turtle_neck, current_shoulder_misalignment);
+        
+        // 3. "시간적 안정성"을 적용하여 최종 판정을 내립니다 (알림용).
         let final_turtle_neck = {
-            // [오류 1 해결] .unwrap() 제거
             let mut history = self.recent_turtle_neck_results.lock();
             if history.len() >= self.temporal_window_size {
                 history.pop_front();
             }
-            history.push_back(current_turtle_neck);
-            
+            history.push_back(current_turtle_neck); // 실시간 결과를 히스토리에 추가
             history.iter().filter(|&&detected| detected).count() >= self.temporal_threshold_count
         };
 
         let final_shoulder_misalignment = {
-            // [오류 1 해결] .unwrap() 제거
             let mut history = self.recent_shoulder_results.lock();
             if history.len() >= self.temporal_window_size {
                 history.pop_front();
             }
-            history.push_back(current_shoulder_misalignment);
-            
+            history.push_back(current_shoulder_misalignment); // 실시간 결과를 히스토리에 추가
             history.iter().filter(|&&detected| detected).count() >= self.temporal_threshold_count
         };
         
-        // [오류 2 해결] 올바른 인수로 함수 호출
-        let posture_score = self.calculate_posture_score(final_turtle_neck, final_shoulder_misalignment);
+        // 4. "최종 판정" 결과를 사용하여 권장사항(알림 메시지)을 생성합니다.
         let recommendations = self.generate_recommendations(final_turtle_neck, final_shoulder_misalignment);
+        
+        // 기타 정보 계산
         let avg_confidence = self.calculate_average_confidence(&keypoints);
+        self.adjust_analysis_interval(realtime_posture_score); // 적응형 절전은 실시간 점수 기준
 
-        self.adjust_analysis_interval(posture_score);
-
+        // 5. 프론트엔드에 "실시간 점수"와 "최종 판정"을 모두 전달합니다.
+        // turtle_neck -> final_turtle_neck (최종 판정)
+        // posture_score -> realtime_posture_score (실시간 점수)
         let result = serde_json::json!({
             "turtle_neck": final_turtle_neck,
             "shoulder_misalignment": final_shoulder_misalignment,
-            "posture_score": posture_score,
+            "posture_score": realtime_posture_score,
             "recommendations": recommendations,
             "confidence": avg_confidence,
             "status": "yolo_analysis_success"
@@ -583,15 +590,24 @@ impl PoseAnalyzer {
         }
 
         // 보정된 비율: (어깨 높이 차이 / 얼굴 세로 길이)
-        // 이 값이 특정 임계값을 넘으면 어깨 불균형으로 판단
-        // 이 방법은 어깨 너비가 원근감으로 왜곡될 때 더 안정적일 수 있습니다.
         let corrected_ratio = shoulder_height_diff / face_height_proxy;
         
         // 기존 비율과 보정된 비율을 조합하여 사용
         let original_ratio = shoulder_height_diff / shoulder_width;
         
-        // 두 비율이 모두 특정 임계값을 넘을 때만 불량으로 판단하여 안정성 향상
-        original_ratio > 0.1 && corrected_ratio > 0.15 // 임계값은 실험을 통해 조정
+        // -----------------------------------------------------------------
+        // 저장된 기준 어깨 정렬을 기반으로 한 개인화된 판단
+        // -----------------------------------------------------------------
+        let baseline_alignment_opt = *self.baseline_shoulder_alignment.lock();
+        
+        if let Some(baseline_corrected_ratio) = baseline_alignment_opt {
+            // 기준 자세가 설정된 경우, 기준값 대비 변화량으로 판단
+            // 현재 비율이 기준 비율보다 50% 이상 증가하면 불량으로 판단
+            corrected_ratio > baseline_corrected_ratio * 1.5
+        } else {
+            // 기준 자세가 설정되지 않은 경우, 기존 절대적 임계값 사용
+            original_ratio > 0.1 && corrected_ratio > 0.15
+        }
     }
 
     fn calculate_posture_score(&self, turtle_neck_detected: bool, shoulder_misalignment_detected: bool) -> u8 {
@@ -626,13 +642,46 @@ impl PoseAnalyzer {
         let image_data = self.decode_base64_image(base64_data)?;
         let keypoints = self.extract_pose_keypoints(&image_data)?;
         
+        // 얼굴-어깨 비율 저장 (거북목 감지용)
         if let Some(ratio) = self.calculate_face_shoulder_ratio(&keypoints) {
             let mut baseline_ratio = self.baseline_face_shoulder_ratio.lock();
             *baseline_ratio = Some(ratio);
             info!("새로운 기준 자세 비율 설정됨: {}", ratio);
+        }
+        
+        // 어깨 정렬 기준값 저장 (어깨 기울기 감지용)
+        if let Some(shoulder_alignment) = self.calculate_shoulder_alignment_ratio(&keypoints) {
+            let mut baseline_alignment = self.baseline_shoulder_alignment.lock();
+            *baseline_alignment = Some(shoulder_alignment);
+            info!("새로운 기준 어깨 정렬 설정됨: {}", shoulder_alignment);
+        }
+        
+        // 둘 중 하나라도 설정되면 성공으로 간주
+        let face_ratio_set = self.baseline_face_shoulder_ratio.lock().is_some();
+        let shoulder_alignment_set = self.baseline_shoulder_alignment.lock().is_some();
+        
+        if face_ratio_set || shoulder_alignment_set {
             Ok(())
         } else {
             Err("기준 자세를 설정하기 위한 키포인트를 감지하지 못했습니다.".into())
+        }
+    }
+    
+    // 어깨 정렬 비율을 계산하는 헬퍼 함수
+    fn calculate_shoulder_alignment_ratio(&self, keypoints: &PoseKeypoints) -> Option<f32> {
+        if keypoints.left_shoulder.confidence < 0.5 || keypoints.right_shoulder.confidence < 0.5 ||
+           keypoints.nose.confidence < 0.5 {
+            return None;
+        }
+        
+        let shoulder_height_diff = (keypoints.left_shoulder.y - keypoints.right_shoulder.y).abs();
+        let avg_shoulder_y = (keypoints.left_shoulder.y + keypoints.right_shoulder.y) / 2.0;
+        let face_height_proxy = (avg_shoulder_y - keypoints.nose.y).abs();
+        
+        if face_height_proxy > 1.0 {
+            Some(shoulder_height_diff / face_height_proxy)
+        } else {
+            None
         }
     }
     fn generate_recommendations(&self, turtle_neck: bool, shoulder_misalignment: bool) -> Vec<serde_json::Value> {
