@@ -11,6 +11,8 @@ use anyhow::{Result, anyhow};
 use parking_lot::Mutex;
 use log::info;
 use std::collections::VecDeque;
+// --- 변경 사항: Tauri 관련 모듈 추가 ---
+use tauri::{AppHandle, Manager, path::BaseDirectory};
 
 #[derive(Debug, Clone)]
 pub struct KeyPoint {
@@ -87,12 +89,13 @@ impl PoseAnalyzer {
         }
     }
 
+    // --- 변경 사항: AppHandle을 인자로 받도록 수정 ---
     // YOLO-pose 모델 초기화
-    pub async fn initialize_model(&self) -> Result<()> {
+    pub async fn initialize_model(&self, handle: AppHandle) -> Result<()> {
         info!("YOLO-pose 모델 초기화 시작...");
         
-        // 실제 검증된 YOLO-pose ONNX 모델 다운로드 및 로드
-        let model_path = self.download_verified_yolo_model().await?;
+        // AppHandle을 사용하여 리소스 경로를 찾도록 수정
+        let model_path = self.download_verified_yolo_model(handle).await?;
         
         let session = SessionBuilder::new()?
             .with_optimization_level(GraphOptimizationLevel::Level3)?
@@ -104,23 +107,22 @@ impl PoseAnalyzer {
         Ok(())
     }
 
+    // --- 변경 사항: Tauri의 리소스 경로 해석 기능 사용 ---
     // 프로젝트 내 YOLO-pose 모델 로드
-    async fn download_verified_yolo_model(&self) -> Result<std::path::PathBuf> {
-        // 프로젝트 루트/models/ 폴더에서 모델 찾기
-        let current_dir = std::env::current_dir()?;
-        // src-tauri에서 실행되므로 상위 디렉토리로 이동
-        let project_root = current_dir.parent().unwrap_or(&current_dir);
-        let model_path = project_root.join("models").join("yolo11n-pose.onnx");
+    async fn download_verified_yolo_model(&self, handle: AppHandle) -> Result<std::path::PathBuf> {
+        // Tauri의 리소스 해석기를 사용하여 모델 경로를 가져옵니다.
+        // tauri.conf.json의 "resources": ["../models"] 설정에 따라
+        // "../models/yolo11n-pose.onnx" 경로를 해석합니다.
+        let model_path = handle
+            .path()
+            .resolve("../models/yolo11n-pose.onnx", BaseDirectory::Resource)
+            .map_err(|e| anyhow!("모델 리소스 경로를 확인하지 못했습니다: {}", e))?;
         
         if !model_path.exists() {
             return Err(anyhow!(
-                "YOLO11n-pose.onnx 모델 파일을 찾을 수 없습니다.\n\
-                다음 경로에 yolo11n-pose.onnx 파일을 넣어주세요: {:?}\n\
-                \n\
-                모델 다운로드 방법:\n\
-                1. https://github.com/ultralytics/assets/releases 에서 yolo11n-pose.onnx 다운로드\n\
-                2. 또는 Ultralytics YOLO 공식 사이트에서 다운로드\n\
-                3. 다운로드한 파일을 models/ 폴더에 넣기",
+                "yolo11n-pose.onnx 모델 파일을 찾을 수 없습니다.\n\
+                경로: {:?}\n\
+                tauri.conf.json의 'bundle.resources' 설정을 확인해주세요.",
                 model_path
             ));
         }
@@ -539,7 +541,7 @@ impl PoseAnalyzer {
         let is_face_too_close = {
             // 저장된 기준 비율 값을 가져옴
             let baseline_ratio_opt = *self.baseline_face_shoulder_ratio.lock();
-
+            log::info!("기준 얼굴-어깨 비율: {:?}", baseline_ratio_opt);
             // baseline_ratio_opt가 Some(값)일 경우, 즉 기준값이 설정된 경우에만 로직 실행
             if let Some(baseline_ratio) = baseline_ratio_opt {
                 // 현재 프레임의 얼굴-어깨 비율을 계산
@@ -642,27 +644,36 @@ impl PoseAnalyzer {
         let image_data = self.decode_base64_image(base64_data)?;
         let keypoints = self.extract_pose_keypoints(&image_data)?;
         
-        // 얼굴-어깨 비율 저장 (거북목 감지용)
+        // ★★★★★ 1. 캘리브레이션 시점의 핵심 키포인트 신뢰도를 로그로 출력합니다. ★★★★★
+        info!("--- 캘리브레이션 키포인트 신뢰도 ---");
+        info!("Left Eye: {:.2}, Right Eye: {:.2}", keypoints.left_eye.confidence, keypoints.right_eye.confidence);
+        info!("Left Shoulder: {:.2}, Right Shoulder: {:.2}", keypoints.left_shoulder.confidence, keypoints.right_shoulder.confidence);
+        info!("------------------------------------");
+
         if let Some(ratio) = self.calculate_face_shoulder_ratio(&keypoints) {
             let mut baseline_ratio = self.baseline_face_shoulder_ratio.lock();
             *baseline_ratio = Some(ratio);
-            info!("새로운 기준 자세 비율 설정됨: {}", ratio);
+            info!("[성공] 새로운 기준 자세 비율 저장됨: {}", ratio); // 성공 로그 강화
+        } else {
+            info!("[실패] 얼굴-어깨 비율 계산 실패. 키포인트 신뢰도를 확인하세요."); // 실패 로그 추가
         }
         
-        // 어깨 정렬 기준값 저장 (어깨 기울기 감지용)
         if let Some(shoulder_alignment) = self.calculate_shoulder_alignment_ratio(&keypoints) {
             let mut baseline_alignment = self.baseline_shoulder_alignment.lock();
             *baseline_alignment = Some(shoulder_alignment);
-            info!("새로운 기준 어깨 정렬 설정됨: {}", shoulder_alignment);
+            info!("[성공] 새로운 기준 어깨 정렬 저장됨: {}", shoulder_alignment);
+        } else {
+            info!("[실패] 어깨 정렬 비율 계산 실패. 키포인트 신뢰도를 확인하세요.");
         }
         
-        // 둘 중 하나라도 설정되면 성공으로 간주
         let face_ratio_set = self.baseline_face_shoulder_ratio.lock().is_some();
         let shoulder_alignment_set = self.baseline_shoulder_alignment.lock().is_some();
         
         if face_ratio_set || shoulder_alignment_set {
+            info!("캘리브레이션 값 저장 성공.");
             Ok(())
         } else {
+            info!("캘리브레이션 값 저장 최종 실패: 유효한 키포인트를 감지하지 못했습니다.");
             Err("기준 자세를 설정하기 위한 키포인트를 감지하지 못했습니다.".into())
         }
     }

@@ -1,5 +1,3 @@
-// main.rs
-
 #![cfg_attr(
     all(not(debug_assertions), target_os = "windows"),
     windows_subsystem = "windows"
@@ -9,11 +7,18 @@ use tauri::{AppHandle, Emitter, Manager};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::time::interval;
-use log::{info, warn, error};
+use log::{info, warn, error, LevelFilter}; // <-- 1. 여기에 LevelFilter 추가
+use std::fs;
+use std::io::Write;
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+
+use tauri_plugin_log::{Target, TargetKind}; // <-- LogLevel은 여기서 더 이상 필요 없음
 
 mod pose_analysis;
-
 use pose_analysis::PoseAnalyzer;
+
+// ... (AppState 및 command 함수들은 모두 그대로 유지, 수정할 필요 없음) ...
+// (생략)
 
 #[derive(Clone, serde::Serialize)]
 struct PostureAlert {
@@ -22,7 +27,6 @@ struct PostureAlert {
     timestamp: u64,
 }
 
-// AppState 구조체는 변경할 필요 없습니다.
 struct AppState {
     pose_analyzer: Arc<PoseAnalyzer>,
     monitoring_active: Arc<Mutex<bool>>,
@@ -32,13 +36,14 @@ struct AppState {
     power_save_mode: Arc<Mutex<bool>>,
 }
 
-// --- 모든 tauri::command 함수들은 변경할 필요가 없습니다. ---
-// (생략 - 기존 코드와 동일)
 #[tauri::command]
-async fn initialize_pose_model(state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn initialize_pose_model(
+    state: tauri::State<'_, AppState>, 
+    handle: tauri::AppHandle
+) -> Result<(), String> {
     info!("Pose 모델 초기화 시작");
     state.pose_analyzer
-        .initialize_model()
+        .initialize_model(handle)
         .await
         .map_err(|e| {
             error!("Pose 모델 초기화 실패: {}", e);
@@ -193,7 +198,6 @@ fn test_model_status(state: tauri::State<'_, AppState>) -> Result<String, String
     Ok(result)
 }
 
-// 백그라운드 모니터링 태스크는 변경할 필요 없습니다.
 async fn background_monitoring_task(app_handle: AppHandle, state: Arc<AppState>) {
     let mut interval = interval(Duration::from_secs(30));
     
@@ -226,19 +230,53 @@ async fn background_monitoring_task(app_handle: AppHandle, state: Arc<AppState>)
     }
 }
 
+#[tauri::command]
+async fn save_calibrated_image(handle: tauri::AppHandle, image_data: String) -> Result<String, String> {
+    let base64_str = image_data.split(',').nth(1)
+        .ok_or_else(|| "잘못된 Base64 데이터 형식입니다.".to_string())?;
+
+    let decoded_image = STANDARD.decode(base64_str)
+        .map_err(|e| format!("Base64 디코딩 실패: {}", e))?;
+
+    let app_data_path = handle.path().app_data_dir()
+        .map_err(|e| format!("앱 데이터 디렉토리를 찾을 수 없습니다: {}", e))?;
+
+    let image_dir = app_data_path.join("calibration_images");
+    fs::create_dir_all(&image_dir)
+        .map_err(|e| format!("이미지 저장 디렉토리 생성 실패: {}", e))?;
+
+    let file_path = image_dir.join("calibrated_pose.jpeg");
+
+    let mut file = fs::File::create(&file_path)
+        .map_err(|e| format!("파일 생성 실패: {:?}", e))?;
+    file.write_all(&decoded_image)
+        .map_err(|e| format!("파일 쓰기 실패: {:?}", e))?;
+    
+    info!("캘리브레이션 이미지 덮어쓰기 완료: {:?}", file_path);
+
+    Ok(file_path.to_string_lossy().into_owned())
+}
+
+
 fn main() {
     run();
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    env_logger::init();
-    
     tauri::Builder::default()
-        // ★★★ 이 부분에 Store 플러그인을 추가합니다. ★★★
+        .plugin(tauri_plugin_log::Builder::new()
+            .targets([
+                Target::new(TargetKind::Stdout),
+                Target::new(TargetKind::Webview),
+            ])
+            // --- 2. 여기가 수정된 부분입니다 ---
+            .level(LevelFilter::Info) // LogLevel::Info 대신 LevelFilter::Info 사용
+            .build())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_fs::init()) 
         .setup(|app| {
             let pose_analyzer = Arc::new(PoseAnalyzer::new());
             let monitoring_active = Arc::new(Mutex::new(false));
@@ -286,7 +324,8 @@ pub fn run() {
             get_alert_messages,
             get_monitoring_status,
             test_model_status,
-            calibrate_user_posture
+            calibrate_user_posture,
+            save_calibrated_image
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

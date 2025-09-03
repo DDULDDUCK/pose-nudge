@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
@@ -31,6 +31,7 @@ reqwest = { version = "0.12", features = ["json", "stream"] }
 ndarray = "0.16"
 anyhow = "1.0"
 log = "0.4"
+tauri-plugin-log = { version = "2.0.0-beta", features = ["colored"] }
 env_logger = "0.11"
 dirs = "6.0.0"
 chrono = { version = "0.4", features = ["serde"] }
@@ -38,3 +39,4 @@ parking_lot = "0.12"
 imageproc = "0.25"
 thiserror = "2.0.16" # 에러 처리를 위해 추가
 tauri-plugin-store = "2"
+tauri-plugin-fs = "2.0.0-beta.5"

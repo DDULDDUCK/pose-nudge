@@ -1,7 +1,9 @@
-import React, { useRef, useCallback, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useCallback, useState, useEffect, //useMemo 
+  } from 'react';
 import Webcam from 'react-webcam';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { load } from '@tauri-apps/plugin-store'; // Tauri Store 플러그인
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -14,7 +16,7 @@ import {
   CameraOff, 
   Activity, 
   AlertTriangle, 
-  Zap, 
+  //Zap, 
   Target, 
   CheckCircle, 
   XCircle,
@@ -159,16 +161,32 @@ const WebcamCapture: React.FC = () => {
       const imageSrc = webcamRef.current.getScreenshot();
       if (!imageSrc) throw new Error('웹캠 이미지를 캡처할 수 없습니다.');
       
+      // 1. 이미지를 디스크에 저장하는 커맨드를 호출합니다.
+      const filePath = await invoke<string>('save_calibrated_image', { imageData: imageSrc });
+      
+      // ★★★★★ AI 분석을 위한 캘리브레이션 커맨드 호출 (누락된 부분) ★★★★★
+      // 이 함수가 호출되어야 Rust의 set_baseline_posture 함수가 실행됩니다.
       await invoke('calibrate_user_posture', { imageData: imageSrc });
       
-      await store.set('calibratedImage', imageSrc);
-      await store.save(); // 변경사항을 파일에 즉시 저장
+      // 3. 저장된 이미지 경로를 웹뷰가 사용할 수 있는 URL로 변환합니다.
+      const imageUrl = await convertFileSrc(filePath);
+      
+      // 4. 이미지 캐싱을 방지하기 위해 URL에 타임스탬프를 추가합니다.
+      const cacheBustedUrl = `${imageUrl}?t=${new Date().getTime()}`;
 
-      setCalibratedImage(imageSrc);
+      // 5. 다음 앱 실행 시 이미지를 불러올 수 있도록 파일 경로를 저장합니다.
+      await store.set('calibratedImagePath', filePath);
+      await store.save(); 
+
+      // 6. 변환된 URL을 React state에 저장하여 화면에 즉시 표시합니다.
+      setCalibratedImage(cacheBustedUrl);
+
       setCalibrationStatus('success');
       setTimeout(() => setCalibrationStatus('idle'), 3000);
     } catch (err) {
-      setError(`자세 캘리브레이션에 실패했습니다: ${err}`);
+      // 에러 메시지를 좀 더 구체적으로 표시합니다.
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(`자세 캘리브레이션에 실패했습니다: ${errorMessage}`);
       setCalibrationStatus('error');
       setTimeout(() => setCalibrationStatus('idle'), 3000);
     }
@@ -176,17 +194,21 @@ const WebcamCapture: React.FC = () => {
 
   // --- useEffect 훅들 (생명주기 관리) ---
   useEffect(() => {
-    const loadInitialData = async () => {
-      try {
-        // ★★★ 2. load() 함수를 사용하여 Store 인스턴스를 생성하고 데이터를 불러옵니다.
-        const storeInstance = await load('.settings.dat', { autoSave: true, defaults: {} });
-        setStore(storeInstance);
-
-        // 1. 저장된 캘리브레이션 이미지 불러오기
-        const savedImage = await storeInstance.get<string>('calibratedImage');
-        if (savedImage) {
-          setCalibratedImage(savedImage);
-        }
+      const loadInitialData = async () => {
+        try {
+          const storeInstance = await load('.settings.dat', { autoSave: true, defaults: {} });
+          setStore(storeInstance);
+  
+          // 1. Base64가 아닌 '이미지 경로'를 불러옵니다.
+          const savedImagePath = await storeInstance.get<string>('calibratedImagePath');
+          console.log('5. Setting state with URL:', savedImagePath);
+          if (savedImagePath) {
+            // 2. 불러온 경로를 웹뷰용 URL로 변환하여 state에 설정합니다.
+            const imageUrl = await convertFileSrc(savedImagePath);
+            const cacheBustedUrl = `${imageUrl}?t=${new Date().getTime()}`;
+            console.log('5. Setting state with URL:', imageUrl);
+            setCalibratedImage(cacheBustedUrl);
+          }
         // 2. 현재 모니터링 상태 불러오기
         try {
           const status = await invoke<MonitoringStatus>('get_monitoring_status');

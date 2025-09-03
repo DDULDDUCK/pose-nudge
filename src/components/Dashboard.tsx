@@ -8,15 +8,15 @@ import {
   Activity, 
   Bell, 
   Settings, 
-  TrendingUp, 
+  //TrendingUp, 
   Clock, 
   Target,
-  Award,
+  //Award,
   AlertCircle,
   CheckCircle,
   RefreshCw,
   Sparkles,
-  User,
+  //User,
   LineChart
 } from 'lucide-react';
 import { 
