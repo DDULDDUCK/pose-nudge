@@ -45,6 +45,9 @@
     ]
   },
   "plugins": {
-    "fs": {}
+    "fs": {},
+    "sql": {
+      "preload": ["sqlite:posture_data.db"]
+    }
   }
 }

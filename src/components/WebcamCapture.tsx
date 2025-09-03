@@ -1,10 +1,9 @@
-import React, { useRef, useCallback, useState, useEffect, //useMemo 
-  } from 'react';
+import React, { useRef, useCallback, useState, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { load } from '@tauri-apps/plugin-store'; // Tauri Store 플러그인
+import { load, Store } from '@tauri-apps/plugin-store'; // Store 타입을 명시적으로 import
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
@@ -16,7 +15,6 @@ import {
   CameraOff, 
   Activity, 
   AlertTriangle, 
-  //Zap, 
   Target, 
   CheckCircle, 
   XCircle,
@@ -27,6 +25,9 @@ import {
   Cpu,
   ZoomIn,
 } from 'lucide-react';
+
+// DB 유틸리티 함수를 import 합니다.
+import { getDb } from '@/lib/db';
 
 // --- 인터페이스 정의 ---
 interface PostureAnalysis {
@@ -63,8 +64,7 @@ const StatusItem: React.FC<StatusItemProps> = ({ label, isBad, detectedText }) =
 
 
 const WebcamCapture: React.FC = () => {
-  // ★★★ 1. useMemo와 useState를 사용하여 Store 인스턴스를 안정적으로 관리합니다.
-  const [store, setStore] = useState<any>(null);
+  const [store, setStore] = useState<Store | null>(null);
   
   // --- State 정의 ---
   const webcamRef = useRef<Webcam>(null);
@@ -105,16 +105,35 @@ const WebcamCapture: React.FC = () => {
       const imageSrc = webcamRef.current.getScreenshot();
       if (!imageSrc) {
         setError('웹캠 이미지를 캡처할 수 없습니다.');
+        setIsAnalyzing(false);
         return;
       }
-      const result = await invoke<string>('analyze_pose_data', { imageData: imageSrc });
-      const parsedResult: PostureAnalysis = JSON.parse(result);
+
+      const resultStr = await invoke<string>('analyze_pose_data', { imageData: imageSrc });
+      const parsedResult: PostureAnalysis = JSON.parse(resultStr);
+
       if (!parsedResult.skip) {
         setAnalysisResult(parsedResult);
+        
+        // 분석 결과를 DB에 저장합니다.
+        try {
+          const db = await getDb();
+          await db.execute(
+            "INSERT INTO posture_log (score, is_turtle_neck, is_shoulder_misaligned, timestamp) VALUES ($1, $2, $3, $4)",
+            [
+              parsedResult.posture_score,
+              parsedResult.turtle_neck,
+              parsedResult.shoulder_misalignment,
+              Math.floor(Date.now() / 1000)
+            ]
+          );
+        } catch (dbError) {
+          console.error("DB 저장 실패:", dbError);
+        }
       }
       setError('');
     } catch (err) {
-      setError(`자세 분석 중 오류 발생: ${err}`);
+      setError(`자세 분석 중 오류 발생: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -161,30 +180,18 @@ const WebcamCapture: React.FC = () => {
       const imageSrc = webcamRef.current.getScreenshot();
       if (!imageSrc) throw new Error('웹캠 이미지를 캡처할 수 없습니다.');
       
-      // 1. 이미지를 디스크에 저장하는 커맨드를 호출합니다.
       const filePath = await invoke<string>('save_calibrated_image', { imageData: imageSrc });
-      
-      // ★★★★★ AI 분석을 위한 캘리브레이션 커맨드 호출 (누락된 부분) ★★★★★
-      // 이 함수가 호출되어야 Rust의 set_baseline_posture 함수가 실행됩니다.
       await invoke('calibrate_user_posture', { imageData: imageSrc });
-      
-      // 3. 저장된 이미지 경로를 웹뷰가 사용할 수 있는 URL로 변환합니다.
       const imageUrl = await convertFileSrc(filePath);
-      
-      // 4. 이미지 캐싱을 방지하기 위해 URL에 타임스탬프를 추가합니다.
       const cacheBustedUrl = `${imageUrl}?t=${new Date().getTime()}`;
 
-      // 5. 다음 앱 실행 시 이미지를 불러올 수 있도록 파일 경로를 저장합니다.
       await store.set('calibratedImagePath', filePath);
       await store.save(); 
 
-      // 6. 변환된 URL을 React state에 저장하여 화면에 즉시 표시합니다.
       setCalibratedImage(cacheBustedUrl);
-
       setCalibrationStatus('success');
       setTimeout(() => setCalibrationStatus('idle'), 3000);
     } catch (err) {
-      // 에러 메시지를 좀 더 구체적으로 표시합니다.
       const errorMessage = err instanceof Error ? err.message : String(err);
       setError(`자세 캘리브레이션에 실패했습니다: ${errorMessage}`);
       setCalibrationStatus('error');
@@ -192,49 +199,45 @@ const WebcamCapture: React.FC = () => {
     }
   }, [isModelInitialized, store]);
 
-  // --- useEffect 훅들 (생명주기 관리) ---
   useEffect(() => {
-      const loadInitialData = async () => {
-        try {
-          const storeInstance = await load('.settings.dat', { autoSave: true, defaults: {} });
-          setStore(storeInstance);
-  
-          // 1. Base64가 아닌 '이미지 경로'를 불러옵니다.
-          const savedImagePath = await storeInstance.get<string>('calibratedImagePath');
-          console.log('5. Setting state with URL:', savedImagePath);
-          if (savedImagePath) {
-            // 2. 불러온 경로를 웹뷰용 URL로 변환하여 state에 설정합니다.
-            const imageUrl = await convertFileSrc(savedImagePath);
-            const cacheBustedUrl = `${imageUrl}?t=${new Date().getTime()}`;
-            console.log('5. Setting state with URL:', imageUrl);
-            setCalibratedImage(cacheBustedUrl);
-          }
-        // 2. 현재 모니터링 상태 불러오기
-        try {
-          const status = await invoke<MonitoringStatus>('get_monitoring_status');
-          setIsMonitoring(status.active);
-          setIsBackgroundMonitoring(status.background);
-          setIsPowerSaveMode(status.power_save);
-        } catch (err) { console.error('모니터링 상태 로드 실패:', err); }
+    const loadInitialData = async () => {
+      try {
+        const storeInstance = await load('.settings.dat');
+
+        setStore(storeInstance);
+
+        const savedImagePath = await storeInstance.get<string>('calibratedImagePath');
+        if (savedImagePath) {
+          const imageUrl = await convertFileSrc(savedImagePath);
+          const cacheBustedUrl = `${imageUrl}?t=${new Date().getTime()}`;
+          setCalibratedImage(cacheBustedUrl);
+        }
+      
+        const status = await invoke<MonitoringStatus>('get_monitoring_status');
+        setIsMonitoring(status.active);
+        setIsBackgroundMonitoring(status.background);
+        setIsPowerSaveMode(status.power_save);
       } catch (err) {
-        console.error('Store 초기화 실패:', err);
-        setError('설정 저장소 초기화에 실패했습니다.');
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.error('초기 데이터 로드 실패:', errorMessage);
+        setError(`설정 또는 상태를 불러오는 데 실패했습니다: ${errorMessage}`);
       }
     };
     loadInitialData();
 
-    // 3. 백그라운드 이벤트 리스너 설정
-    const unlisten = listen('posture-alert', (event) => {
+    const unlistenPromise = listen('posture-alert', (event) => {
       setError(event.payload as string);
       setTimeout(() => setError(''), 5000);
     });
-    return () => { unlisten.then(f => f()); };
-  }, []); // ★★★ 3. 최초 1회만 실행되도록 빈 의존성 배열 사용
+    return () => { 
+      unlistenPromise.then(unlistenFn => unlistenFn());
+    };
+  }, []);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (isMonitoring && isModelInitialized) {
-      interval = setInterval(() => captureAndAnalyze(false), 2000);
+      interval = setInterval(() => captureAndAnalyze(false), 3000); // 3초 간격
     }
     return () => { if (interval) clearInterval(interval); };
   }, [isMonitoring, isModelInitialized, captureAndAnalyze]);
@@ -248,7 +251,6 @@ const WebcamCapture: React.FC = () => {
   const onUserMedia = useCallback(() => setIsWebcamReady(true), []);
   const onUserMediaError = useCallback(() => setError('웹캠에 접근할 수 없습니다. 카메라 권한을 확인해주세요.'), []);
 
-  // --- 렌더링 관련 헬퍼 ---
   const getPostureStatusColor = (score?: number | null): string => {
     if (score == null) return 'ring-slate-300';
     if (score >= 80) return 'ring-emerald-500';
@@ -257,7 +259,6 @@ const WebcamCapture: React.FC = () => {
   };
   const isReadyToMonitor = isWebcamReady && isModelInitialized;
 
-  // --- JSX 렌더링 ---
   return (
     <div className="p-4 md:p-6 lg:p-8 bg-slate-50 min-h-screen">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
@@ -279,7 +280,15 @@ const WebcamCapture: React.FC = () => {
         <div className="lg:col-span-2 space-y-6">
           <Card className="overflow-hidden">
             <div className={`relative group ${!isMonitoring ? 'grayscale' : ''}`}>
-              <Webcam ref={webcamRef} audio={false} videoConstraints={videoConstraints} onUserMedia={onUserMedia} onUserMediaError={onUserMediaError} className="w-full h-auto aspect-video transition-all" screenshotFormat="image/jpeg"/>
+              <Webcam 
+                ref={webcamRef} 
+                audio={false} 
+                videoConstraints={videoConstraints} 
+                onUserMedia={onUserMedia} 
+                onUserMediaError={onUserMediaError} 
+                className="w-full h-auto aspect-video transition-all" 
+                screenshotFormat="image/jpeg"
+              />
               <div className={`absolute inset-0 transition-all ring-4 ring-inset pointer-events-none ${getPostureStatusColor(analysisResult?.posture_score)}`} />
               {isMonitoring && analysisResult && (
                 <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-sm text-white p-3 rounded-lg text-left">
@@ -368,15 +377,10 @@ const WebcamCapture: React.FC = () => {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings2 className="h-5 w-5"/>부가 설정
-              </CardTitle>
-              <CardDescription>
-                앱의 세부 동작을 제어하여 사용자 경험을 최적화합니다.
-              </CardDescription>
+              <CardTitle className="flex items-center gap-2"><Settings2 className="h-5 w-5"/>부가 설정</CardTitle>
+              <CardDescription>앱의 세부 동작을 제어하여 사용자 경험을 최적화합니다.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              {/* 백그라운드 모니터링 설정 */}
               <div className="flex items-center justify-between p-3 rounded-lg transition-colors hover:bg-slate-100">
                 <div className="space-y-0.5">
                   <label htmlFor="bg-monitor" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
@@ -385,9 +389,7 @@ const WebcamCapture: React.FC = () => {
                       {isBackgroundMonitoring ? '활성화' : '비활성화'}
                     </span>
                   </label>
-                  <p className="text-xs text-muted-foreground">
-                    앱이 최소화 상태일 때도 자세 분석을 계속합니다.
-                  </p>
+                  <p className="text-xs text-muted-foreground">앱이 최소화 상태일 때도 자세 분석을 계속합니다.</p>
                 </div>
                 <Switch 
                   id="bg-monitor" 
@@ -397,8 +399,6 @@ const WebcamCapture: React.FC = () => {
                   aria-label="백그라운드 모니터링 토글"
                 />
               </div>
-
-              {/* 적응형 전력 절약 설정 */}
               <div className="flex items-center justify-between p-3 rounded-lg transition-colors hover:bg-slate-100">
                 <div className="space-y-0.5">
                   <label htmlFor="power-save" className="text-sm font-medium leading-none">
@@ -407,9 +407,7 @@ const WebcamCapture: React.FC = () => {
                       {isPowerSaveMode ? '활성화' : '비활성화'}
                     </span>
                   </label>
-                  <p className="text-xs text-muted-foreground">
-                    사용자 움직임이 없을 때 분석 빈도를 줄여 리소스를 아낍니다.
-                  </p>
+                  <p className="text-xs text-muted-foreground">사용자 움직임이 없을 때 분석 빈도를 줄여 리소스를 아낍니다.</p>
                 </div>
                 <Switch
                   id="power-save"

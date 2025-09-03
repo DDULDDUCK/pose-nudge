@@ -9,6 +9,9 @@
     "core:default",
     "opener:default",
     "store:default",
-    "notification:default"
+    "notification:default",
+    "sql:default",
+    "sql:allow-load",
+    "sql:allow-execute"
   ]
 }
