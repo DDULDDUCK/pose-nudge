@@ -61,12 +61,14 @@ pub struct PoseAnalyzer {
     temporal_threshold_count: usize, // window_size 중 몇 개 이상일 때 true로 판단할지
     baseline_face_shoulder_ratio: Mutex<Option<f32>>,
     baseline_shoulder_alignment: Mutex<Option<f32>>, // 기준 어깨 기울기
+    // ★★★★★ 수정: 거북목(머리 쏠림) 판단을 위한 기준값 필드 추가 ★★★★★
+    baseline_head_forward_ratio: Mutex<Option<f32>>,
 }
 
 impl PoseAnalyzer {
     pub fn new() -> Self {
         const WINDOW_SIZE: usize = 3; // 최근 3개 프레임
-        const THRESHOLD_COUNT: usize = 2; // 그 중 2개 이상 감지되면 최종 판정
+        const THRESHOLD_COUNT: usize = 1; // 그 중 2개 이상 감지되면 최종 판정
 
         Self {
             // --- 기존 초기화 ---
@@ -86,6 +88,8 @@ impl PoseAnalyzer {
             temporal_threshold_count: THRESHOLD_COUNT,
             baseline_face_shoulder_ratio: Mutex::new(None),
             baseline_shoulder_alignment: Mutex::new(None),
+            // ★★★★★ 수정: 새로 추가된 필드 초기화 ★★★★★
+            baseline_head_forward_ratio: Mutex::new(None),
         }
     }
 
@@ -453,27 +457,18 @@ impl PoseAnalyzer {
     fn analyze_posture(&self, keypoints: &PoseKeypoints) -> HashMap<String, serde_json::Value> {
         let mut results = HashMap::new();
         
-        // (시간적 안정성 로직이 적용되었다고 가정)
-        // 여기서는 간단하게 현재 프레임의 결과를 사용합니다.
-        // 실제로는 final_turtle_neck, final_shoulder_misalignment 값을
-        // 이 함수로 전달받거나 이 함수 내에서 계산해야 합니다.
         let turtle_neck_detected = self.detect_turtle_neck(keypoints);
         let shoulder_misalignment = self.detect_shoulder_misalignment(keypoints);
 
-        // ★★★★★ 수정된 호출 방식 ★★★★★
-        // 위에서 계산한 bool 타입의 결과 변수들을 전달합니다.
         let posture_score = self.calculate_posture_score(turtle_neck_detected, shoulder_misalignment);
         results.insert("posture_score".to_string(), serde_json::Value::Number(serde_json::Number::from(posture_score)));
         
-        // 키포인트 신뢰도 검사
         let avg_confidence = self.calculate_average_confidence(keypoints);
         results.insert("confidence".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(avg_confidence as f64).unwrap_or(serde_json::Number::from(0))));
         
-        // 권장사항
         let recommendations = self.generate_recommendations(turtle_neck_detected, shoulder_misalignment);
         results.insert("recommendations".to_string(), serde_json::Value::Array(recommendations));
         
-        // 분석 간격 동적 조정
         self.adjust_analysis_interval(posture_score);
         
         results
@@ -500,76 +495,57 @@ impl PoseAnalyzer {
         }
     }
 
+    // ★★★★★ 수정: 완전히 개선된 거북목 탐지 함수 ★★★★★
     fn detect_turtle_neck(&self, keypoints: &PoseKeypoints) -> bool {
-        // -----------------------------------------------------------------
-        // 조건 1: 머리가 어깨선보다 앞으로 쏠렸는지 확인 (기존 로직 개선판)
-        // -----------------------------------------------------------------
-        let is_head_forward = {
-            // 판단에 필요한 주요 키포인트들의 신뢰도 확인
-            if keypoints.left_ear.confidence < 0.5 || keypoints.right_ear.confidence < 0.5 ||
-            keypoints.left_shoulder.confidence < 0.5 || keypoints.right_shoulder.confidence < 0.5 {
-                // 신뢰도가 낮으면 판단 불가, false 반환
-                false
-            } else {
-                // 귀의 중심 x좌표와 어깨의 중심 x좌표를 계산
-                let ear_center_x = (keypoints.left_ear.x + keypoints.right_ear.x) / 2.0;
-                let shoulder_center_x = (keypoints.left_shoulder.x + keypoints.right_shoulder.x) / 2.0;
-                
-                // 어깨 너비를 기준으로 정규화(Normalization)하여 거리 왜곡을 줄임
-                let shoulder_width = (keypoints.right_shoulder.x - keypoints.left_shoulder.x).abs();
-
-                // 어깨 너비가 유효한 경우에만 계산 (0으로 나누기 방지)
-                if shoulder_width > 1.0 {
-                    // (귀 중심 - 어깨 중심)의 수평 거리를 어깨 너비로 나눔
-                    // 이 값이 양수이고 특정 임계값보다 크면 머리가 앞으로 쏠린 것으로 판단
-                    let forward_ratio = (ear_center_x - shoulder_center_x) / shoulder_width;
-                    
-                    // 임계값 (예: 0.05). 이 값은 실험을 통해 조정이 필요할 수 있습니다.
-                    // 정면 자세에서 귀는 어깨보다 약간 뒤에 있으므로, 이 비율이 양수가 되는 것 자체가
-                    // 머리가 상당히 앞으로 나왔다는 신호일 수 있습니다.
-                    forward_ratio > 0.05
-                } else {
-                    // 어깨 너비가 유효하지 않으면 판단 불가
-                    false
-                }
-            }
-        };
-
-        // -----------------------------------------------------------------
-        // 조건 2: 얼굴이 기준 자세보다 카메라에 가까워졌는지 확인 (새로운 비율 로직)
-        // -----------------------------------------------------------------
+        // --- 조건 1: 얼굴이 기준보다 카메라에 가까워졌는가? (비율 기반) ---
         let is_face_too_close = {
-            // 저장된 기준 비율 값을 가져옴
             let baseline_ratio_opt = *self.baseline_face_shoulder_ratio.lock();
-            log::info!("기준 얼굴-어깨 비율: {:?}", baseline_ratio_opt);
-            // baseline_ratio_opt가 Some(값)일 경우, 즉 기준값이 설정된 경우에만 로직 실행
+            
             if let Some(baseline_ratio) = baseline_ratio_opt {
-                // 현재 프레임의 얼굴-어깨 비율을 계산
                 if let Some(current_ratio) = self.calculate_face_shoulder_ratio(keypoints) {
-                    // 현재 비율이 기준 비율보다 20% 이상 크면 얼굴이 가까워진 것으로 판단
-                    // (예: 기준이 0.5일 때, 현재가 0.6 이상이면 true)
-                    current_ratio > baseline_ratio * 1.2
+                    // [개선] 백분율(%) 대신 '절대 허용 오차'를 더하는 방식으로 변경
+                    // 이렇게 하면 기준값이 작을 때 발생하는 과민 반응을 방지할 수 있습니다.
+                    const RATIO_TOLERANCE: f32 = 0.03; // 얼굴-어깨 비율이 기준보다 0.03 이상 커지면 감지
+
+                    current_ratio > baseline_ratio + RATIO_TOLERANCE
                 } else {
-                    // 현재 비율을 계산할 수 없으면, 이 조건은 통과하지 못한 것으로 간주
-                    false
+                    false // 현재 비율 계산 불가
                 }
             } else {
-                // 기준값이 아직 설정되지 않았다면, 이 검사는 항상 통과시킴(true).
-                // 이렇게 해야 캘리브레이션 전에도 기존 로직(is_head_forward)만으로도
-                // 최소한의 거북목 감지가 가능합니다.
-                // 만약 캘리브레이션을 필수로 하려면 false로 바꾸면 됩니다.
-                true 
+                // [수정] 기준값이 없으면 이 검사는 '통과'가 아니라 '무시(false)'해야 함
+                false
             }
         };
 
-        // -----------------------------------------------------------------
-        // 최종 판단: 두 조건 중 하나라도 만족하면 거북목으로 판단
-        // 더 엄격하게 하려면 `&&` (AND) 연산자를 사용하세요.
-        // 여기서는 `||` (OR)를 사용하여 둘 중 하나의 현상이라도 감지되면 알려주도록 합니다.
-        // -----------------------------------------------------------------
-        is_head_forward || is_face_too_close
+        // --- 조건 2: 머리가 기준보다 앞으로 쏠렸는가? (x좌표 기반) ---
+        let is_head_forward = {
+            let baseline_forward_opt = *self.baseline_head_forward_ratio.lock();
+            
+            if let Some(baseline_forward) = baseline_forward_opt {
+                if let Some(current_forward) = self.calculate_head_forward_ratio(keypoints) {
+                    // [개선] 고정 임계값 대신, '개인화된 기준 + 허용 오차' 방식 사용
+                    const FORWARD_TOLERANCE: f32 = 0.02; 
+
+                    current_forward > baseline_forward + FORWARD_TOLERANCE
+                } else {
+                    false // 현재 쏠림 계산 불가
+                }
+            } else {
+                // [개선] 캘리브레이션 안됐을 경우를 대비한 기본(Fallback) 로직
+                // 기존의 고정 임계값 방식을 사용하되, 조금 더 여유로운 값으로 설정
+                if let Some(current_forward) = self.calculate_head_forward_ratio(keypoints) {
+                    current_forward > 0.08 // 기존 0.05보다 약간 여유롭게 설정
+                } else {
+                    false
+                }
+            }
+        };
+
+        // --- 최종 판단: 두 조건 중 하나라도 만족하면 거북목으로 판단 ---
+        is_face_too_close || is_head_forward
     }
 
+    // ★★★★★ 수정: 개선된 어깨 기울기 판단 로직 ★★★★★
     fn detect_shoulder_misalignment(&self, keypoints: &PoseKeypoints) -> bool {
         if keypoints.left_shoulder.confidence < 0.5 || keypoints.right_shoulder.confidence < 0.5 ||
         keypoints.nose.confidence < 0.5 {
@@ -583,7 +559,6 @@ impl PoseAnalyzer {
             return false;
         }
         
-        // 어깨-코의 평균 수직 거리를 계산하여 원근감 보정 요소로 사용
         let avg_shoulder_y = (keypoints.left_shoulder.y + keypoints.right_shoulder.y) / 2.0;
         let face_height_proxy = (avg_shoulder_y - keypoints.nose.y).abs();
         
@@ -591,23 +566,27 @@ impl PoseAnalyzer {
             return false;
         }
 
-        // 보정된 비율: (어깨 높이 차이 / 얼굴 세로 길이)
         let corrected_ratio = shoulder_height_diff / face_height_proxy;
         
-        // 기존 비율과 보정된 비율을 조합하여 사용
-        let original_ratio = shoulder_height_diff / shoulder_width;
-        
-        // -----------------------------------------------------------------
-        // 저장된 기준 어깨 정렬을 기반으로 한 개인화된 판단
-        // -----------------------------------------------------------------
         let baseline_alignment_opt = *self.baseline_shoulder_alignment.lock();
         
         if let Some(baseline_corrected_ratio) = baseline_alignment_opt {
-            // 기준 자세가 설정된 경우, 기준값 대비 변화량으로 판단
-            // 현재 비율이 기준 비율보다 50% 이상 증가하면 불량으로 판단
-            corrected_ratio > baseline_corrected_ratio * 1.5
+            // [개선 로직 1] 기준 자세에 대한 '허용 오차'를 정의합니다.
+            // 이 값은 사용자의 자연스러운 작은 움직임을 무시하기 위함입니다.
+            const TOLERANCE: f32 = 0.1; 
+            
+            // [개선 로직 2] 자세가 나쁘다고 판단할 '최소 절대 기준'을 정의합니다.
+            // 기준 자세가 완벽하더라도, 이 기준을 넘지 않으면 경고하지 않습니다.
+            const MIN_ABSOLUTE_THRESHOLD: f32 = 0.2;
+
+            let is_worse_than_baseline = corrected_ratio > baseline_corrected_ratio + TOLERANCE;
+            let is_objectively_bad = corrected_ratio > MIN_ABSOLUTE_THRESHOLD;
+            
+            is_worse_than_baseline && is_objectively_bad
+
         } else {
-            // 기준 자세가 설정되지 않은 경우, 기존 절대적 임계값 사용
+            // 기준 자세가 설정되지 않은 경우, 기존의 고정 임계값 로직을 사용합니다.
+            let original_ratio = shoulder_height_diff / shoulder_width;
             original_ratio > 0.1 && corrected_ratio > 0.15
         }
     }
@@ -640,22 +619,23 @@ impl PoseAnalyzer {
         }
     }
 
+    // ★★★★★ 수정: 캘리브레이션 기능 강화 ★★★★★
     pub fn set_baseline_posture(&self, base64_data: &str) -> Result<(), Box<dyn std::error::Error>> {
         let image_data = self.decode_base64_image(base64_data)?;
         let keypoints = self.extract_pose_keypoints(&image_data)?;
         
-        // ★★★★★ 1. 캘리브레이션 시점의 핵심 키포인트 신뢰도를 로그로 출력합니다. ★★★★★
         info!("--- 캘리브레이션 키포인트 신뢰도 ---");
         info!("Left Eye: {:.2}, Right Eye: {:.2}", keypoints.left_eye.confidence, keypoints.right_eye.confidence);
         info!("Left Shoulder: {:.2}, Right Shoulder: {:.2}", keypoints.left_shoulder.confidence, keypoints.right_shoulder.confidence);
+        info!("Left Ear: {:.2}, Right Ear: {:.2}", keypoints.left_ear.confidence, keypoints.right_ear.confidence);
         info!("------------------------------------");
 
         if let Some(ratio) = self.calculate_face_shoulder_ratio(&keypoints) {
             let mut baseline_ratio = self.baseline_face_shoulder_ratio.lock();
             *baseline_ratio = Some(ratio);
-            info!("[성공] 새로운 기준 자세 비율 저장됨: {}", ratio); // 성공 로그 강화
+            info!("[성공] 새로운 기준 자세 비율 저장됨: {}", ratio);
         } else {
-            info!("[실패] 얼굴-어깨 비율 계산 실패. 키포인트 신뢰도를 확인하세요."); // 실패 로그 추가
+            info!("[실패] 얼굴-어깨 비율 계산 실패. 키포인트 신뢰도를 확인하세요.");
         }
         
         if let Some(shoulder_alignment) = self.calculate_shoulder_alignment_ratio(&keypoints) {
@@ -666,10 +646,19 @@ impl PoseAnalyzer {
             info!("[실패] 어깨 정렬 비율 계산 실패. 키포인트 신뢰도를 확인하세요.");
         }
         
+        if let Some(forward_ratio) = self.calculate_head_forward_ratio(&keypoints) {
+            let mut baseline_forward = self.baseline_head_forward_ratio.lock();
+            *baseline_forward = Some(forward_ratio);
+            info!("[성공] 새로운 기준 머리 쏠림 비율 저장됨: {}", forward_ratio);
+        } else {
+            info!("[실패] 머리 쏠림 비율 계산 실패. 키포인트 신뢰도를 확인하세요.");
+        }
+        
         let face_ratio_set = self.baseline_face_shoulder_ratio.lock().is_some();
         let shoulder_alignment_set = self.baseline_shoulder_alignment.lock().is_some();
+        let head_forward_set = self.baseline_head_forward_ratio.lock().is_some();
         
-        if face_ratio_set || shoulder_alignment_set {
+        if face_ratio_set || shoulder_alignment_set || head_forward_set {
             info!("캘리브레이션 값 저장 성공.");
             Ok(())
         } else {
@@ -695,6 +684,26 @@ impl PoseAnalyzer {
             None
         }
     }
+
+    // ★★★★★ 추가: 머리 전방 쏠림 비율 계산 헬퍼 함수 ★★★★★
+    fn calculate_head_forward_ratio(&self, keypoints: &PoseKeypoints) -> Option<f32> {
+        if keypoints.left_ear.confidence < 0.5 || keypoints.right_ear.confidence < 0.5 ||
+           keypoints.left_shoulder.confidence < 0.5 || keypoints.right_shoulder.confidence < 0.5 {
+            return None;
+        }
+
+        let ear_center_x = (keypoints.left_ear.x + keypoints.right_ear.x) / 2.0;
+        let shoulder_center_x = (keypoints.left_shoulder.x + keypoints.right_shoulder.x) / 2.0;
+        let shoulder_width = (keypoints.right_shoulder.x - keypoints.left_shoulder.x).abs();
+
+        if shoulder_width > 1.0 {
+            // (귀 중심 - 어깨 중심)의 수평 거리를 어깨 너비로 나눔
+            Some((ear_center_x - shoulder_center_x) / shoulder_width)
+        } else {
+            None
+        }
+    }
+
     fn generate_recommendations(&self, turtle_neck: bool, shoulder_misalignment: bool) -> Vec<serde_json::Value> {
         let mut recommendations = Vec::new();
         

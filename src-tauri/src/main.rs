@@ -135,18 +135,22 @@ async fn analyze_pose_data(
             if let Some(turtle_neck) = result.get("turtle_neck").and_then(|v| v.as_bool()) {
                 if turtle_neck {
                     let mut last_alert = state.last_alert_time.lock().unwrap();
-                    if last_alert.elapsed() >= Duration::from_secs(30) {
+                    if last_alert.elapsed() >= Duration::from_secs(5) {
                         let mut alert_messages = state.alert_messages.lock().unwrap();
                         alert_messages.push("거북목이 감지되었습니다. 목을 곧게 펴주세요!".to_string());
                         *last_alert = Instant::now();
                     }
                 }
             }
-            
+
             if let Some(shoulder_misalignment) = result.get("shoulder_misalignment").and_then(|v| v.as_bool()) {
                 if shoulder_misalignment {
-                    let mut alert_messages = state.alert_messages.lock().unwrap();
-                    alert_messages.push("어깨 정렬이 불량합니다. 등받이에 등을 기대주세요!".to_string());
+                    let mut last_alert = state.last_alert_time.lock().unwrap();
+                    if last_alert.elapsed() >= Duration::from_secs(5) {
+                        let mut alert_messages = state.alert_messages.lock().unwrap();
+                        alert_messages.push("어깨 정렬이 불량합니다. 등받이에 등을 기대주세요!".to_string());
+                        *last_alert = Instant::now();
+                    }
                 }
             }
             
@@ -199,7 +203,7 @@ fn test_model_status(state: tauri::State<'_, AppState>) -> Result<String, String
 }
 
 async fn background_monitoring_task(app_handle: AppHandle, state: Arc<AppState>) {
-    let mut interval = interval(Duration::from_secs(30));
+    let mut interval = interval(Duration::from_secs(3));
     
     loop {
         interval.tick().await;
