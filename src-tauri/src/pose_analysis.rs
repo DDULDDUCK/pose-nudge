@@ -68,7 +68,7 @@ pub struct PoseAnalyzer {
 impl PoseAnalyzer {
     pub fn new() -> Self {
         const WINDOW_SIZE: usize = 3; // 최근 3개 프레임
-        const THRESHOLD_COUNT: usize = 1; // 그 중 2개 이상 감지되면 최종 판정
+        const THRESHOLD_COUNT: usize = 2; // 그 중 2개 이상 감지되면 최종 판정
 
         Self {
             // --- 기존 초기화 ---
@@ -505,7 +505,7 @@ impl PoseAnalyzer {
                 if let Some(current_ratio) = self.calculate_face_shoulder_ratio(keypoints) {
                     // [개선] 백분율(%) 대신 '절대 허용 오차'를 더하는 방식으로 변경
                     // 이렇게 하면 기준값이 작을 때 발생하는 과민 반응을 방지할 수 있습니다.
-                    const RATIO_TOLERANCE: f32 = 0.03; // 얼굴-어깨 비율이 기준보다 0.03 이상 커지면 감지
+                    const RATIO_TOLERANCE: f32 = 0.04; // 얼굴-어깨 비율이 기준보다 0.03 이상 커지면 감지
 
                     current_ratio > baseline_ratio + RATIO_TOLERANCE
                 } else {
@@ -524,7 +524,7 @@ impl PoseAnalyzer {
             if let Some(baseline_forward) = baseline_forward_opt {
                 if let Some(current_forward) = self.calculate_head_forward_ratio(keypoints) {
                     // [개선] 고정 임계값 대신, '개인화된 기준 + 허용 오차' 방식 사용
-                    const FORWARD_TOLERANCE: f32 = 0.02; 
+                    const FORWARD_TOLERANCE: f32 = 0.03; 
 
                     current_forward > baseline_forward + FORWARD_TOLERANCE
                 } else {
