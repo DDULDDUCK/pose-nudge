@@ -1,21 +1,32 @@
-// src-tauri/src/main.rs
-
 #![cfg_attr(
     all(not(debug_assertions), target_os = "windows"),
     windows_subsystem = "windows"
 )]
 
-use tauri::{AppHandle, Manager, Emitter, State};
+use tauri::{
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::TrayIconBuilder,
+    AppHandle, Emitter, Manager, State,
+};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::time::interval;
 use log::{info, warn, error, LevelFilter};
 use std::fs;
 use std::io::Write;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 
+use nokhwa::{
+    pixel_format::RgbFormat,
+    Camera,
+    utils::{CameraIndex, RequestedFormat, RequestedFormatType},
+    Buffer,
+};
+use image::{ImageBuffer, Rgb};
+
 use tauri_plugin_log::{Target, TargetKind};
-use tauri_plugin_sql::{Migration, MigrationKind};
+use tauri_plugin_sql::{Migration, MigrationKind, DbInstances};
+use sqlx;
 
 mod pose_analysis;
 use pose_analysis::PoseAnalyzer;
@@ -26,32 +37,18 @@ struct AppState {
     monitoring_active: Arc<Mutex<bool>>,
     last_alert_time: Arc<Mutex<Instant>>,
     alert_messages: Arc<Mutex<Vec<String>>>,
+    camera: Arc<Mutex<Option<Camera>>>,
 }
 
+// (command 함수들은 이전과 동일)
 #[tauri::command]
 async fn analyze_pose_data(
     state: State<'_, AppState>,
     image_data: String,
 ) -> Result<String, String> {
     match state.pose_analyzer.analyze_image_sync(&image_data) {
-        Ok(result_str) => {
-            let result_json: serde_json::Value = serde_json::from_str(&result_str)
-                .map_err(|e| format!("결과 JSON 파싱 실패: {}", e))?;
-            
-            let turtle_neck = result_json.get("turtle_neck").and_then(|v| v.as_bool()).unwrap_or(false);
-            let shoulder_mis = result_json.get("shoulder_misalignment").and_then(|v| v.as_bool()).unwrap_or(false);
-
-            if turtle_neck || shoulder_mis {
-                let mut last_alert = state.last_alert_time.lock().unwrap();
-                if last_alert.elapsed() >= Duration::from_secs(10) {
-                    let message = if turtle_neck && shoulder_mis { "거북목과 어깨 기울어짐이 감지되었습니다.".to_string() } else if turtle_neck { "거북목이 감지되었습니다. 목을 곧게 펴주세요!".to_string() } else { "어깨 정렬이 불량합니다. 등받이에 등을 기대주세요!".to_string() };
-                    state.alert_messages.lock().unwrap().push(message);
-                    *last_alert = Instant::now();
-                }
-            }
-            Ok(result_str)
-        }
-        Err(e) => { warn!("자세 분석 실패: {}", e); Err(e.to_string()) }
+        Ok(result_str) => Ok(result_str),
+        Err(e) => { warn!("자세 분석 실패 (캘리브레이션): {}", e); Err(e.to_string()) }
     }
 }
 
@@ -119,6 +116,19 @@ async fn save_calibrated_image(handle: tauri::AppHandle, image_data: String) -> 
     Ok(file_path.to_string_lossy().into_owned())
 }
 
+#[tauri::command]
+async fn set_detection_settings(
+    state: State<'_, AppState>,
+    frequency: u8,
+    turtle_sensitivity: u8,
+    shoulder_sensitivity: u8,
+) -> Result<(), String> {
+    state.pose_analyzer.set_notification_frequency(frequency);
+    state.pose_analyzer.set_turtle_neck_sensitivity(turtle_sensitivity);
+    state.pose_analyzer.set_shoulder_sensitivity(shoulder_sensitivity);
+    Ok(())
+}
+
 async fn background_alert_task(app_handle: AppHandle, state: AppState) {
     let mut interval = interval(Duration::from_secs(3));
     loop {
@@ -133,7 +143,6 @@ async fn background_alert_task(app_handle: AppHandle, state: AppState) {
                 None
             }
         };
-
         if let Some(messages) = messages_to_send {
             for message in messages {
                 info!("백그라운드 알림 발생: {}", &message);
@@ -142,6 +151,66 @@ async fn background_alert_task(app_handle: AppHandle, state: AppState) {
         }
     }
 }
+
+async fn background_monitoring_task(app_handle: AppHandle, state: AppState) {
+    let mut interval = interval(Duration::from_secs(3));
+    loop {
+        interval.tick().await;
+        if !*state.monitoring_active.lock().unwrap() {
+            continue;
+        }
+        
+        // ★★★★★ 수정: 스트림이 열려있을 때만 프레임을 가져옵니다. ★★★★★
+        let buffer_option = {
+            let mut cam_lock = state.camera.lock().unwrap();
+            if let Some(cam) = cam_lock.as_mut() {
+                if cam.is_stream_open() {
+                    cam.frame().ok()
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
+        if let Some(buffer) = buffer_option {
+            if let Ok(decoded_image) = buffer.decode_image::<RgbFormat>() {
+                if let Some(rgb_image) = ImageBuffer::<Rgb<u8>, _>::from_raw(decoded_image.width(), decoded_image.height(), decoded_image.into_raw()) {
+                    if let Ok(result_str) = state.pose_analyzer.analyze_image_buffer(&rgb_image) {
+                        if let Ok(result_json) = serde_json::from_str::<serde_json::Value>(&result_str) {
+                            let _ = app_handle.emit("analysis-update", &result_json);
+                            let score = result_json.get("posture_score").and_then(|v| v.as_i64()).unwrap_or(0);
+                            let is_turtle = result_json.get("turtle_neck").and_then(|v| v.as_bool()).unwrap_or(false);
+                            let is_shoulder = result_json.get("shoulder_misalignment").and_then(|v| v.as_bool()).unwrap_or(false);
+                            let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+                            let db_path = "sqlite:posture_data.db";
+                            let instances = app_handle.state::<DbInstances>();
+                            let db_map = instances.0.read().await;
+                            if let Some(pool) = db_map.get(db_path) {
+                                if let tauri_plugin_sql::DbPool::Sqlite(sqlite_pool) = pool {
+                                    let query = "INSERT INTO posture_log (score, is_turtle_neck, is_shoulder_misaligned, timestamp) VALUES (?, ?, ?, ?)";
+                                    if let Err(e) = sqlx::query(query).bind(score).bind(is_turtle).bind(is_shoulder).bind(timestamp).execute(sqlite_pool).await {
+                                        error!("데이터베이스 저장 실패: {}", e);
+                                    }
+                                }
+                            }
+                            if is_turtle || is_shoulder {
+                                let mut last_alert = state.last_alert_time.lock().unwrap();
+                                if last_alert.elapsed() >= Duration::from_secs(10) {
+                                    let message = if is_turtle && is_shoulder { "거북목과 어깨 기울어짐이 감지되었습니다.".to_string() } else if is_turtle { "거북목이 감지되었습니다. 목을 곧게 펴주세요!".to_string() } else { "어깨 정렬이 불량합니다. 등받이에 등을 기대주세요!".to_string() };
+                                    state.alert_messages.lock().unwrap().push(message);
+                                    *last_alert = Instant::now();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 fn main() {
     run();
@@ -152,9 +221,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init()) 
         .plugin(tauri_plugin_os::init())
-        .plugin(tauri_plugin_log::Builder::new()
-            .targets([Target::new(TargetKind::Stdout), Target::new(TargetKind::Webview)])
-            .level(LevelFilter::Info).build())
+        .plugin(tauri_plugin_log::Builder::new().targets([Target::new(TargetKind::Stdout), Target::new(TargetKind::Webview)]).level(LevelFilter::Info).build())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -165,34 +232,116 @@ pub fn run() {
                 vec![Migration {
                     version: 1,
                     description: "create posture log table",
-                    // ★★★★★ 수정: 안정적인 원본 SQL문으로 복원 ★★★★★
-                    sql: "CREATE TABLE IF NOT EXISTS posture_log (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            score INTEGER NOT NULL,
-                            is_turtle_neck BOOLEAN NOT NULL,
-                            is_shoulder_misaligned BOOLEAN NOT NULL,
-                            timestamp INTEGER NOT NULL
-                          );",
+                    sql: "CREATE TABLE IF NOT EXISTS posture_log (id INTEGER PRIMARY KEY AUTOINCREMENT, score INTEGER NOT NULL, is_turtle_neck BOOLEAN NOT NULL, is_shoulder_misaligned BOOLEAN NOT NULL, timestamp INTEGER NOT NULL);",
                     kind: MigrationKind::Up,
                 }],
             ).build())
         .setup(|app| {
+            let quit = PredefinedMenuItem::quit(app, Some("Quit Pose Nudge"))?;
+            let show = MenuItem::with_id(app, "show", "Show App", true, None::<&str>)?;
+            let start_monitoring_item = MenuItem::with_id(app, "start_monitoring", "Start Monitoring", true, None::<&str>)?;
+            let stop_monitoring_item = MenuItem::with_id(app, "stop_monitoring", "Stop Monitoring", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&start_monitoring_item, &stop_monitoring_item, &PredefinedMenuItem::separator(app)?, &show, &quit])?;
+
+            let camera = {
+                let index = CameraIndex::Index(0);
+                let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate);
+                match Camera::new(index, requested) {
+                    Ok(cam) => {
+                        info!("웹캠 초기화 성공: {}", cam.info().human_name());
+                        // ★★★★★ 수정: 앱 시작 시 스트림을 열지 않습니다. ★★★★★
+                        Arc::new(Mutex::new(Some(cam)))
+                    }
+                    Err(e) => {
+                        error!("웹캠 초기화 실패: {}", e);
+                        Arc::new(Mutex::new(None))
+                    }
+                }
+            };
+
             let app_state = AppState {
                 pose_analyzer: Arc::new(PoseAnalyzer::new()),
                 monitoring_active: Arc::new(Mutex::new(false)),
                 last_alert_time: Arc::new(Mutex::new(Instant::now() - Duration::from_secs(60))),
                 alert_messages: Arc::new(Mutex::new(Vec::new())),
+                camera: camera.clone(),
             };
-            
             app.manage(app_state.clone());
-            
-            let app_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                background_alert_task(app_handle, app_state).await;
-            });
+            let alert_app_handle = app.handle().clone();
+            let alert_state = app_state.clone();
+            tauri::async_runtime::spawn(async move { background_alert_task(alert_app_handle, alert_state).await; });
+            let monitor_app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move { background_monitoring_task(monitor_app_handle, app_state).await; });
 
+            // ★★★★★ 수정: 트레이 메뉴에서 직접 카메라 스트림을 제어합니다. ★★★★★
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("Pose Nudge")
+                .menu(&menu)
+                .on_menu_event(move |app, event| {
+                    let state = app.state::<AppState>();
+                    match event.id.as_ref() {
+                        "quit" => app.exit(0),
+                        "show" => if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.unminimize();
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        },
+                        "start_monitoring" => {
+                            *state.monitoring_active.lock().unwrap() = true;
+                            if let Some(cam) = &mut *state.camera.lock().unwrap() {
+                                if !cam.is_stream_open() {
+                                    if let Err(e) = cam.open_stream() {
+                                        error!("웹캠 스트림 시작 실패: {}", e);
+                                    } else {
+                                        info!("웹캠 스트림 시작됨.");
+                                    }
+                                }
+                            }
+                            let _ = app.emit("monitoring-state-changed", &serde_json::json!({ "active": true }));
+                        }
+                        "stop_monitoring" => {
+                            *state.monitoring_active.lock().unwrap() = false;
+                            if let Some(cam) = &mut *state.camera.lock().unwrap() {
+                                if cam.is_stream_open() {
+                                    if let Err(e) = cam.stop_stream() {
+                                        error!("웹캠 스트림 중지 실패: {}", e);
+                                    } else {
+                                        info!("웹캠 스트림 중지됨.");
+                                    }
+                                }
+                            }
+                            let _ = app.emit("monitoring-state-changed", &serde_json::json!({ "active": false }));
+                        }
+                        _ => {}
+                    }
+                })
+                .build(app)?;
             info!("Pose Nudge 애플리케이션 초기화 완료");
             Ok(())
+        })
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+            tauri::WindowEvent::Destroyed => {
+                let camera_to_stop = {
+                    let state = window.state::<AppState>();
+                    let mut guard = state.camera.lock().unwrap();
+                    guard.take()
+                };
+                if let Some(mut cam) = camera_to_stop {
+                    if cam.is_stream_open() {
+                        if let Err(e) = cam.stop_stream() {
+                             error!("웹캠 스트림 종료 실패: {}", e);
+                        } else {
+                            info!("웹캠 스트림을 안전하게 종료했습니다.");
+                        }
+                    }
+                }
+            }
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             initialize_pose_model,
@@ -204,7 +353,8 @@ pub fn run() {
             get_monitoring_status,
             test_model_status,
             calibrate_user_posture,
-            save_calibrated_image
+            save_calibrated_image,
+            set_detection_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

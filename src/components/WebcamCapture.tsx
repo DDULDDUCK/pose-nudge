@@ -1,5 +1,3 @@
-// src/components/WebcamCapture.tsx
-
 import React, { useRef, useCallback, useState, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import { useTranslation } from 'react-i18next';
@@ -18,13 +16,13 @@ import {
   Target,
   CheckCircle,
   XCircle,
-  PlayCircle,
+  //PlayCircle,
   StopCircle,
   Lightbulb,
   Cpu,
   ZoomIn,
 } from 'lucide-react';
-import { getDb } from '@/lib/db';
+//import { getDb } from '@/lib/db';
 
 // --- 인터페이스 정의 ---
 interface PostureAnalysis {
@@ -33,7 +31,6 @@ interface PostureAnalysis {
   posture_score: number;
   recommendations: string[];
   confidence?: number;
-  skip?: boolean;
 }
 
 interface MonitoringStatus {
@@ -59,15 +56,13 @@ const WebcamCapture: React.FC = () => {
   const { t } = useTranslation();
   const [store, setStore] = useState<Store | null>(null);
   
-  // --- State 정의 ---
   const webcamRef = useRef<Webcam>(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [isWebcamReady, setIsWebcamReady] = useState(false);
   const [isModelInitialized, setIsModelInitialized] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<PostureAnalysis | null>(null);
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState<string>(''); // setError는 유지하되, 사용처가 줄어듭니다.
   const [initializationProgress, setInitializationProgress] = useState<string>('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [calibrationStatus, setCalibrationStatus] = useState<'idle' | 'calibrating' | 'success' | 'error'>('idle');
   const [calibratedImage, setCalibratedImage] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -88,67 +83,20 @@ const WebcamCapture: React.FC = () => {
       await invoke('initialize_pose_model');
       setIsModelInitialized(true);
       setInitializationProgress('');
-      setError('');
     } catch (err) {
-      setError(t('webcam.initModelError', 'AI 모델 초기화에 실패했습니다. 네트워크를 확인해주세요.'));
+      // toast로 에러를 띄우는 것이 더 좋을 수 있습니다.
+      console.error(err);
+      setError(t('webcam.initModelError', 'AI 모델 초기화에 실패했습니다.'));
       setInitializationProgress('');
     }
   }, [isModelInitialized, t]);
+  
+  // ★★★★★ 제거: 프론트엔드의 주기적인 캡처 및 분석 관련 함수들은 모두 삭제합니다. ★★★★★
+  // const captureAndAnalyze = useCallback(...);
+  // const startMonitoring = useCallback(...);
+  // const stopMonitoring = useCallback(...);
 
-  const captureAndAnalyze = useCallback(async (forceAnalysis = false) => {
-    if (isAnalyzing || !webcamRef.current || (!isMonitoring && !forceAnalysis) || !isModelInitialized) return;
-    try {
-      setIsAnalyzing(true);
-      const imageSrc = webcamRef.current.getScreenshot();
-      if (!imageSrc) {
-        setError(t('webcam.captureError', '웹캠 이미지를 캡처할 수 없습니다.'));
-        setIsAnalyzing(false);
-        return;
-      }
-
-      const resultStr = await invoke<string>('analyze_pose_data', { imageData: imageSrc });
-      const parsedResult: PostureAnalysis = JSON.parse(resultStr);
-
-      if (!parsedResult.skip) {
-        setAnalysisResult(parsedResult);
-        
-        const db = await getDb();
-        await db.execute(
-          "INSERT INTO posture_log (score, is_turtle_neck, is_shoulder_misaligned, timestamp) VALUES ($1, $2, $3, $4)",
-          [
-            parsedResult.posture_score,
-            parsedResult.turtle_neck ? 1 : 0,
-            parsedResult.shoulder_misalignment ? 1 : 0,
-            Math.floor(Date.now() / 1000)
-          ]
-        );
-      }
-      setError('');
-    } catch (err) {
-      console.error("분석 또는 DB 저장 실패:", err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      setError(t('webcam.analysisError', `자세 분석 중 오류 발생: ${errorMessage}`));
-    } finally {
-      setIsAnalyzing(false);
-    }
-  }, [isMonitoring, isModelInitialized, isAnalyzing]);
-
-  const startMonitoring = useCallback(async () => {
-    if (!isModelInitialized) { await initializeModel(); return; }
-    try {
-      await invoke('start_monitoring');
-      setIsMonitoring(true);
-      setTimeout(() => captureAndAnalyze(true), 100);
-    } catch (err) { setError(t('webcam.monitoringStartError', '모니터링 시작에 실패했습니다.')); }
-  }, [captureAndAnalyze, isModelInitialized, initializeModel]);
-
-  const stopMonitoring = useCallback(async () => {
-    try {
-      await invoke('stop_monitoring');
-      setIsMonitoring(false);
-    } catch (err) { setError(t('webcam.monitoringStopError', '모니터링 중지에 실패했습니다.') + error); }
-  }, []);
-
+  // '캘리브레이션' 기능은 프론트엔드 웹캠을 사용해야 하므로 그대로 유지합니다.
   const handleCalibrate = useCallback(async () => {
     if (!webcamRef.current || !isModelInitialized || !store) {
       setError(t('webcam.calibrationNotReady', '모델, 웹캠 또는 저장소가 준비되지 않았습니다.'));
@@ -188,8 +136,7 @@ const WebcamCapture: React.FC = () => {
         const savedImagePath = await storeInstance.get<string>('calibratedImagePath');
         if (savedImagePath) {
           const imageUrl = convertFileSrc(savedImagePath);
-          const cacheBustedUrl = `${imageUrl}?t=${new Date().getTime()}`;
-          setCalibratedImage(cacheBustedUrl);
+          setCalibratedImage(`${imageUrl}?t=${new Date().getTime()}`);
         }
       
         const status = await invoke<MonitoringStatus>('get_monitoring_status');
@@ -200,22 +147,29 @@ const WebcamCapture: React.FC = () => {
     };
     loadInitialData();
 
-    const unlistenPromise = listen<string>('posture-alert', (event) => {
-      window.dispatchEvent(new CustomEvent('pose-nudge-toast', { detail: event.payload }));
-      // 기존 setError 제거: 알림은 NotificationSystem에서 처리
-    });
+    // 백엔드 이벤트 리스너 설정
+    const unlistenPromises = Promise.all([
+      listen<string>('posture-alert', (event) => {
+        window.dispatchEvent(new CustomEvent('pose-nudge-toast', { detail: event.payload }));
+      }),
+      // ★★★★★ 추가: 시스템 트레이에서 상태 변경 시 UI 동기화 ★★★★★
+      listen<{ active: boolean }>('monitoring-state-changed', (event) => {
+        setIsMonitoring(event.payload.active);
+      }),
+      // ★★★★★ 추가: 백엔드에서 온 실시간 분석 결과를 받아 UI 업데이트 ★★★★★
+      listen<PostureAnalysis>('analysis-update', (event) => {
+        // 데이터베이스 저장은 이제 백엔드에서 처리해야 합니다. 여기서는 UI 상태만 업데이트합니다.
+        setAnalysisResult(event.payload);
+      }),
+    ]);
+
     return () => { 
-      unlistenPromise.then(unlistenFn => unlistenFn());
+      unlistenPromises.then(unlisteners => unlisteners.forEach(unlisten => unlisten()));
     };
   }, []);
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (isMonitoring && isModelInitialized) {
-      interval = setInterval(() => captureAndAnalyze(false), 3000);
-    }
-    return () => { if (interval) clearInterval(interval); };
-  }, [isMonitoring, isModelInitialized, captureAndAnalyze]);
+  // ★★★★★ 제거: 프론트엔드에서 주기적으로 분석을 호출하던 useEffect는 삭제합니다. ★★★★★
+  // useEffect(() => { ... setInterval ... }, []);
 
   useEffect(() => {
     if (isWebcamReady && !isModelInitialized) {
@@ -224,7 +178,7 @@ const WebcamCapture: React.FC = () => {
   }, [isWebcamReady, isModelInitialized, initializeModel]);
 
   const onUserMedia = useCallback(() => setIsWebcamReady(true), []);
-  const onUserMediaError = useCallback(() => setError(t('webcam.permissionError', '웹캠에 접근할 수 없습니다. 카메라 권한을 확인해주세요.')), [t]);
+  const onUserMediaError = useCallback(() => setError(t('webcam.permissionError', '웹캠에 접근할 수 없습니다.')), [t]);
 
   const getPostureStatusColor = (score?: number | null): string => {
     if (score == null) return 'ring-slate-300';
@@ -233,17 +187,15 @@ const WebcamCapture: React.FC = () => {
     return 'ring-red-500';
   };
   
-  const isReadyToMonitor = isWebcamReady && isModelInitialized;
+  const isReadyForUI = isWebcamReady && isModelInitialized;
 
   return (
     <div className="space-y-6">
-      {/* error 상태는 NotificationSystem 토스트로 대체 */}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 왼쪽: 웹캠 및 분석 결과 */}
         <div className="lg:col-span-2 space-y-6">
           <Card className="overflow-hidden">
-            <div className={`relative group ${!isMonitoring ? 'grayscale' : ''}`}>
+            <div className={`relative group`}>
               <Webcam 
                 ref={webcamRef} 
                 audio={false} 
@@ -260,20 +212,13 @@ const WebcamCapture: React.FC = () => {
                   <p className="text-4xl font-bold">{analysisResult.posture_score}<span className="text-2xl">{t('dashboard.scoreUnit', '/100')}</span></p>
                 </div>
               )}
-              {isMonitoring && isAnalyzing && (
-                <div className="absolute top-4 right-4 bg-black/60 text-white px-3 py-1.5 rounded-full text-xs flex items-center gap-2 animate-pulse">
-                  <Activity className="h-4 w-4" /> {t('webcam.analyzing', '분석 중...')}
-                </div>
-              )}
             </div>
           </Card>
           <Card>
             <CardHeader>
               <CardTitle>{t('webcam.realtimeStatus', '실시간 분석 현황')}</CardTitle>
               <CardDescription>
-                {isMonitoring
-                  ? t('webcam.currentDetected', '현재 감지된 자세 정보입니다.')
-                  : t('webcam.startMonitoringDesc', '모니터링을 시작하면 분석 결과가 표시됩니다.')}
+                {t(isMonitoring ? 'webcam.currentDetected' : 'webcam.startMonitoringDescTray', '시스템 트레이 아이콘으로 모니터링을 시작하면 분석 결과가 표시됩니다.')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -305,26 +250,52 @@ const WebcamCapture: React.FC = () => {
         </div>
 
         {/* 오른쪽: 컨트롤 패널 */}
-        <div className="lg:col-span-1 space-y-6">
+        <div className="lg-col-span-1 space-y-6">
           <Card>
             <CardHeader><CardTitle>{t('webcam.controlPanel', '컨트롤 패널')}</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <Button onClick={() => isMonitoring ? stopMonitoring() : startMonitoring()} disabled={!isReadyToMonitor} className="w-full" variant={isMonitoring ? 'destructive' : 'default'} size="lg">
-                {isMonitoring ? <StopCircle className="mr-2 h-5 w-5" /> : <PlayCircle className="mr-2 h-5 w-5" />}
-                {isMonitoring ? t('webcam.stopMonitoring', '모니터링 중지') : t('webcam.startMonitoring', '모니터링 시작')}
-              </Button>
-              <div className="text-xs text-center text-muted-foreground pt-1 h-4">
-                {!isReadyToMonitor && (initializationProgress || t('webcam.preparing', '웹캠과 AI 모델을 준비 중입니다...'))}
+              {/* ★★★★★ 변경: 시작/중지 버튼을 상태 표시 UI로 대체 ★★★★★ */}
+              <div className={`w-full p-4 rounded-lg text-center font-semibold ${isMonitoring ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                {isMonitoring ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Activity className="h-5 w-5" />
+                    <span>{t('webcam.monitoringActiveStatus', '모니터링 활성화 중')}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2">
+                    <StopCircle className="h-5 w-5" />
+                    <span>{t('webcam.monitoringInactiveStatus', '모니터링 비활성화 중')}</span>
+                  </div>
+                )}
               </div>
+              <p className="text-xs text-center text-muted-foreground pt-1">
+                {t('webcam.trayControlGuide', '시스템 트레이 아이콘으로 모니터링을 제어하세요.')}
+              </p>
+              
               <div className="flex justify-around text-sm pt-2">
                 <span className={`flex items-center gap-1.5 ${isWebcamReady ? 'text-emerald-600' : 'text-slate-400'}`}><Camera className="h-4 w-4"/>{t('webcam.webcam', '웹캠')} {isWebcamReady ? 'ON' : 'OFF'}</span>
                 <span className={`flex items-center gap-1.5 ${isModelInitialized ? 'text-emerald-600' : 'text-slate-400'}`}><Cpu className="h-4 w-4"/>{t('webcam.aiModel', 'AI 모델')} {isModelInitialized ? 'ON' : 'OFF'}</span>
               </div>
             </CardContent>
+            {/* 에러 및 초기화 진행 상태 표시 */}
+            {(error || initializationProgress) && (
+              <div className="mt-2 space-y-1">
+                {error && (
+                  <div className="text-xs text-red-600 font-semibold px-2 py-1 rounded bg-red-50 border border-red-200">
+                    {error}
+                  </div>
+                )}
+                {initializationProgress && (
+                  <div className="text-xs text-slate-500 px-2 py-1 rounded bg-slate-50 border border-slate-200">
+                    {initializationProgress}
+                  </div>
+                )}
+              </div>
+            )}
             <Separator className="my-4"/>
             <CardContent>
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Target className="h-4 w-4"/>{t('webcam.calibration', '자세 캘리브레이션')}</h3>
-              <Button onClick={handleCalibrate} disabled={!isReadyToMonitor || calibrationStatus === 'calibrating'} className="w-full" variant="outline">
+              <Button onClick={handleCalibrate} disabled={!isReadyForUI || calibrationStatus === 'calibrating'} className="w-full" variant="outline">
                 {calibrationStatus === 'calibrating' ? t('webcam.saving', '저장 중...') : t('webcam.setCurrentPosture', '현재 자세를 기준으로 설정')}
               </Button>
               <p className="text-xs text-muted-foreground mt-2">{t('webcam.calibrationGuide', '바른 자세를 취한 후 버튼을 눌러 기준점을 설정하세요.')}</p>

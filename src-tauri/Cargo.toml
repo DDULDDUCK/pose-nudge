@@ -18,19 +18,19 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["protocol-asset"] }
+tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1.0", features = ["full"] }
-image = "0.25"
+image = "0.25.8"
 base64 = "0.22"
 ort = { version = "2.0.0-rc.10", features = ["download-binaries"] }
 reqwest = { version = "0.12", features = ["json", "stream"] }
 ndarray = "0.16"
 anyhow = "1.0"
-log = "0.4"
+log = "0.4.28"
 tauri-plugin-log = { version = "2.0.0-beta", features = ["colored"] }
 env_logger = "0.11"
 dirs = "6.0.0"
@@ -43,3 +43,5 @@ tauri-plugin-fs = "2.0.0-beta.5"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-shell = "2"
 tauri-plugin-os = "2"
+nokhwa = { version = "0.10.9", features = ["input-native", "output-threaded"] }
+sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio"] } 
