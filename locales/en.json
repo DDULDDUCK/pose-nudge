@@ -1,5 +1,5 @@
 {
-  "alert_turtle": "거북목이 감지되었습니다. 목을 곧게 펴주세요!",
-  "alert_shoulder": "어깨 정렬이 불량합니다. 등받이에 등을 기대주세요!",
-  "alert_both": "거북목과 어깨 기울어짐이 감지되었습니다."
+  "alert_turtle": "Turtle neck detected. Please straighten your neck!",
+  "alert_shoulder": "Shoulder alignment is poor. Please lean back against the chair!",
+  "alert_both": "Turtle neck and shoulder tilt detected."
 }

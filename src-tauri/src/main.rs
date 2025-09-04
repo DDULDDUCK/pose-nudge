@@ -337,7 +337,7 @@ async fn background_alert_task(app_handle: AppHandle, state: AppState) {
         if let Some(message) = messages_to_send {
             if message.is_empty() { continue; }
 
-            info!("시스템 알림 발생: {}", &message);
+            info!("시스템 알림 발생: {}", &message);        
 
             // ✨ 이것이 Tauri v2의 표준적인 알림 호출 방식입니다.
             let builder = app_handle.notification().builder();
@@ -440,7 +440,10 @@ async fn background_monitoring_task(app_handle: AppHandle, state: AppState) {
                                         "alert_shoulder"
                                     };
 
+                                    info!("번역 시도: lang='{}', key='{}'", lang, message_key);
                                     let message = translations.get(&lang, message_key);
+                                    info!("번역 결과: '{}'", message);
+
 
                                     state.alert_messages.lock().unwrap().push(message);
                                     *last_alert = Instant::now();

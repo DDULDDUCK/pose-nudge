@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Dashboard from '@/components/Dashboard';
 import WebcamCapture from '@/components/WebcamCapture';
-import NotificationSystem from '@/components/NotificationSystem';
 import SettingsPage from '@/components/SettingsPage'; // 새로 만든 설정 페이지 가져오기
 import {
   LayoutDashboard,
@@ -143,8 +142,6 @@ function App() {
         </main>
       </div>
 
-      {/* 알림 시스템 */}
-      <NotificationSystem />
     </div>
   );
 }
