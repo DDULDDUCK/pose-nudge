@@ -10,7 +10,8 @@ use tauri::{
 };
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tokio::time::interval;
+// ✨ tokio::time::sleep을 직접 사용하기 위해 추가
+use tokio::time::sleep;
 use log::{info, warn, error, LevelFilter};
 use std::fs;
 use std::io::Write;
@@ -19,7 +20,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use nokhwa::{
     pixel_format::RgbFormat,
     Camera,
-    utils::{CameraIndex, RequestedFormat, RequestedFormatType},
+    utils::{ApiBackend, CameraIndex, RequestedFormat, RequestedFormatType, CameraInfo},
     Buffer,
 };
 use image::{ImageBuffer, Rgb};
@@ -31,6 +32,12 @@ use sqlx;
 mod pose_analysis;
 use pose_analysis::PoseAnalyzer;
 
+#[derive(serde::Serialize, Clone)]
+struct CameraDetail {
+    index: u32,
+    name: String,
+}
+
 #[derive(Clone)]
 struct AppState {
     pose_analyzer: Arc<PoseAnalyzer>,
@@ -38,9 +45,13 @@ struct AppState {
     last_alert_time: Arc<Mutex<Instant>>,
     alert_messages: Arc<Mutex<Vec<String>>>,
     camera: Arc<Mutex<Option<Camera>>>,
+    selected_camera_index: Arc<Mutex<u32>>,
+    // ✨ 모니터링 주기를 저장할 상태 추가 (단위: 초)
+    monitoring_interval_secs: Arc<Mutex<u64>>,
 }
 
-// (command 함수들은 이전과 동일)
+// --- Tauri Commands ---
+
 #[tauri::command]
 async fn analyze_pose_data(
     state: State<'_, AppState>,
@@ -117,6 +128,60 @@ async fn save_calibrated_image(handle: tauri::AppHandle, image_data: String) -> 
 }
 
 #[tauri::command]
+async fn get_available_cameras() -> Result<Vec<CameraDetail>, String> {
+    match nokhwa::query(ApiBackend::Auto) {
+        Ok(cameras) => {
+            info!("사용 가능한 카메라 {}개 발견", cameras.len());
+            let camera_details = cameras.into_iter().map(|cam: CameraInfo| {
+                CameraDetail {
+                    index: cam.index().as_index().unwrap_or(0) as u32,
+                    name: cam.human_name(),
+                }
+            }).collect();
+            Ok(camera_details)
+        },
+        Err(e) => {
+            error!("카메라 목록 조회 실패: {}", e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn set_selected_camera(state: State<'_, AppState>, index: u32) -> Result<(), String> {
+    info!("선택된 카메라 변경: index {}", index);
+    let mut current_cam_lock = state.camera.lock().unwrap();
+    
+    if *state.monitoring_active.lock().unwrap() && current_cam_lock.is_some() {
+        info!("모니터링 중 카메라 변경 시도...");
+        if let Some(mut cam) = current_cam_lock.take() {
+            if cam.is_stream_open() {
+                let _ = cam.stop_stream();
+            }
+        }
+        
+        let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate);
+        match Camera::new(CameraIndex::Index(index), requested) {
+            Ok(mut new_cam) => {
+                info!("새 카메라 초기화 성공: {}", new_cam.info().human_name());
+                if let Err(e) = new_cam.open_stream() {
+                    error!("새 카메라 스트림 시작 실패: {}", e);
+                } else {
+                    info!("새 카메라 스트림 시작됨.");
+                    *current_cam_lock = Some(new_cam);
+                }
+            }
+            Err(e) => {
+                error!("인덱스 {}번 새 카메라 초기화 실패: {}", index, e);
+            }
+        }
+    }
+    
+    *state.selected_camera_index.lock().unwrap() = index;
+    Ok(())
+}
+
+#[tauri::command]
 async fn set_detection_settings(
     state: State<'_, AppState>,
     frequency: u8,
@@ -129,8 +194,20 @@ async fn set_detection_settings(
     Ok(())
 }
 
+// ✨ 추가된 command: 프론트엔드에서 모니터링 주기를 설정
+#[tauri::command]
+async fn set_monitoring_interval(state: State<'_, AppState>, interval_secs: u64) -> Result<(), String> {
+    // 0초 미만은 비정상적이므로 최소 1초로 제한
+    let new_interval = if interval_secs > 0 { interval_secs } else { 1 };
+    info!("모니터링 주기 변경: {}초", new_interval);
+    *state.monitoring_interval_secs.lock().unwrap() = new_interval;
+    Ok(())
+}
+
+// --- Background Tasks ---
+
 async fn background_alert_task(app_handle: AppHandle, state: AppState) {
-    let mut interval = interval(Duration::from_secs(3));
+    let mut interval = tokio::time::interval(Duration::from_secs(3));
     loop {
         interval.tick().await;
         let messages_to_send = {
@@ -153,14 +230,21 @@ async fn background_alert_task(app_handle: AppHandle, state: AppState) {
 }
 
 async fn background_monitoring_task(app_handle: AppHandle, state: AppState) {
-    let mut interval = interval(Duration::from_secs(3));
+    // ✨ 고정된 interval 대신 loop 안에서 동적으로 sleep
     loop {
-        interval.tick().await;
+        // ✨ 루프 시작 시점에서 현재 설정된 주기를 가져옴
+        let interval_duration = {
+            let secs = *state.monitoring_interval_secs.lock().unwrap();
+            Duration::from_secs(secs)
+        };
+        // ✨ 설정된 주기만큼 대기
+        sleep(interval_duration).await;
+        
+        // 모니터링이 활성화 상태가 아니면 다음 주기로 넘어감
         if !*state.monitoring_active.lock().unwrap() {
             continue;
         }
         
-        // ★★★★★ 수정: 스트림이 열려있을 때만 프레임을 가져옵니다. ★★★★★
         let buffer_option = {
             let mut cam_lock = state.camera.lock().unwrap();
             if let Some(cam) = cam_lock.as_mut() {
@@ -211,6 +295,7 @@ async fn background_monitoring_task(app_handle: AppHandle, state: AppState) {
     }
 }
 
+// --- Main Application Setup ---
 
 fn main() {
     run();
@@ -243,37 +328,26 @@ pub fn run() {
             let stop_monitoring_item = MenuItem::with_id(app, "stop_monitoring", "Stop Monitoring", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&start_monitoring_item, &stop_monitoring_item, &PredefinedMenuItem::separator(app)?, &show, &quit])?;
 
-            let camera = {
-                let index = CameraIndex::Index(0);
-                let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate);
-                match Camera::new(index, requested) {
-                    Ok(cam) => {
-                        info!("웹캠 초기화 성공: {}", cam.info().human_name());
-                        // ★★★★★ 수정: 앱 시작 시 스트림을 열지 않습니다. ★★★★★
-                        Arc::new(Mutex::new(Some(cam)))
-                    }
-                    Err(e) => {
-                        error!("웹캠 초기화 실패: {}", e);
-                        Arc::new(Mutex::new(None))
-                    }
-                }
-            };
-
+            // ✨ AppState 초기화 시 monitoring_interval_secs 필드 추가
             let app_state = AppState {
                 pose_analyzer: Arc::new(PoseAnalyzer::new()),
                 monitoring_active: Arc::new(Mutex::new(false)),
                 last_alert_time: Arc::new(Mutex::new(Instant::now() - Duration::from_secs(60))),
                 alert_messages: Arc::new(Mutex::new(Vec::new())),
-                camera: camera.clone(),
+                camera: Arc::new(Mutex::new(None)),
+                selected_camera_index: Arc::new(Mutex::new(0)),
+                // ✨ 모니터링 주기 기본값 3초로 설정
+                monitoring_interval_secs: Arc::new(Mutex::new(3)),
             };
             app.manage(app_state.clone());
+
             let alert_app_handle = app.handle().clone();
             let alert_state = app_state.clone();
             tauri::async_runtime::spawn(async move { background_alert_task(alert_app_handle, alert_state).await; });
+            
             let monitor_app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move { background_monitoring_task(monitor_app_handle, app_state).await; });
 
-            // ★★★★★ 수정: 트레이 메뉴에서 직접 카메라 스트림을 제어합니다. ★★★★★
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("Pose Nudge")
@@ -288,19 +362,41 @@ pub fn run() {
                             let _ = window.set_focus();
                         },
                         "start_monitoring" => {
+                            info!("'Start Monitoring' 클릭됨");
                             *state.monitoring_active.lock().unwrap() = true;
-                            if let Some(cam) = &mut *state.camera.lock().unwrap() {
+
+                            let mut cam_lock = state.camera.lock().unwrap();
+                            if let Some(cam) = cam_lock.as_mut() {
                                 if !cam.is_stream_open() {
                                     if let Err(e) = cam.open_stream() {
-                                        error!("웹캠 스트림 시작 실패: {}", e);
+                                        error!("기존 웹캠 스트림 시작 실패: {}", e);
                                     } else {
-                                        info!("웹캠 스트림 시작됨.");
+                                        info!("기존 웹캠 스트림 시작됨.");
+                                    }
+                                }
+                            } else {
+                                let index = *state.selected_camera_index.lock().unwrap();
+                                info!("선택된 인덱스 {}번 카메라로 초기화 시도", index);
+                                let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate);
+                                match Camera::new(CameraIndex::Index(index), requested) {
+                                    Ok(mut cam) => {
+                                        info!("웹캠 초기화 성공: {}", cam.info().human_name());
+                                        if let Err(e) = cam.open_stream() {
+                                            error!("새 웹캠 스트림 시작 실패: {}", e);
+                                        } else {
+                                            info!("새 웹캠 스트림 시작됨.");
+                                            *cam_lock = Some(cam);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("인덱스 {}번 웹캠 초기화 실패: {}", index, e);
                                     }
                                 }
                             }
                             let _ = app.emit("monitoring-state-changed", &serde_json::json!({ "active": true }));
                         }
                         "stop_monitoring" => {
+                            info!("'Stop Monitoring' 클릭됨");
                             *state.monitoring_active.lock().unwrap() = false;
                             if let Some(cam) = &mut *state.camera.lock().unwrap() {
                                 if cam.is_stream_open() {
@@ -354,7 +450,11 @@ pub fn run() {
             test_model_status,
             calibrate_user_posture,
             save_calibrated_image,
-            set_detection_settings
+            set_detection_settings,
+            get_available_cameras,
+            set_selected_camera,
+            // ✨ 새로 추가한 command 등록
+            set_monitoring_interval
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
