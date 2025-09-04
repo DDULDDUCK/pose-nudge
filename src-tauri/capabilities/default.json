@@ -12,6 +12,16 @@
     "notification:default",
     "sql:default",
     "sql:allow-load",
-    "sql:allow-execute"
+    "sql:allow-execute",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "open-settings",
+          "cmd": "open",
+          "args": true
+        }
+      ]
+    }
   ]
 }

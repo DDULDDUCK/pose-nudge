@@ -1,9 +1,11 @@
+// src-tauri/src/main.rs
+
 #![cfg_attr(
     all(not(debug_assertions), target_os = "windows"),
     windows_subsystem = "windows"
 )]
 
-use tauri::{AppHandle, Manager, Emitter, State}; // State 추가
+use tauri::{AppHandle, Manager, Emitter, State};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::time::interval;
@@ -18,23 +20,17 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 mod pose_analysis;
 use pose_analysis::PoseAnalyzer;
 
-// AppState 정의는 그대로 유지
-// ★★★ 하지만 Clone을 유도할 수 있도록 derive 추가 ★★★
 #[derive(Clone)]
 struct AppState {
     pose_analyzer: Arc<PoseAnalyzer>,
     monitoring_active: Arc<Mutex<bool>>,
-    background_monitoring: Arc<Mutex<bool>>,
     last_alert_time: Arc<Mutex<Instant>>,
     alert_messages: Arc<Mutex<Vec<String>>>,
-    power_save_mode: Arc<Mutex<bool>>,
 }
-
-// --- Command 함수들 (시그니처를 State<AppState>로 변경하여 명확하게 함) ---
 
 #[tauri::command]
 async fn analyze_pose_data(
-    state: State<'_, AppState>, // tauri::State 대신 State 사용
+    state: State<'_, AppState>,
     image_data: String,
 ) -> Result<String, String> {
     match state.pose_analyzer.analyze_image_sync(&image_data) {
@@ -80,33 +76,9 @@ async fn stop_monitoring(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn start_background_monitoring(state: State<'_, AppState>) -> Result<(), String> {
-    *state.background_monitoring.lock().unwrap() = true;
-    state.pose_analyzer.set_background_monitoring(true);
-    info!("백그라운드 모니터링 시작");
-    Ok(())
-}
-
-#[tauri::command]
-async fn stop_background_monitoring(state: State<'_, AppState>) -> Result<(), String> {
-    *state.background_monitoring.lock().unwrap() = false;
-    state.pose_analyzer.set_background_monitoring(false);
-    info!("백그라운드 모니터링 중지");
-    Ok(())
-}
-
-#[tauri::command]
 async fn calibrate_user_posture(state: State<'_, AppState>, image_data: String) -> Result<(), String> {
     info!("사용자 자세 캘리브레이션 시작");
     state.pose_analyzer.set_baseline_posture(&image_data).map_err(|e| { error!("자세 캘리브레이션 실패: {}", e); e.to_string() })
-}
-
-#[tauri::command]
-async fn set_power_save_mode(state: State<'_, AppState>, enabled: bool) -> Result<(), String> {
-    *state.power_save_mode.lock().unwrap() = enabled;
-    state.pose_analyzer.set_adaptive_mode(enabled);
-    info!("전력 절약 모드 변경: {}", enabled);
-    Ok(())
 }
 
 #[tauri::command]
@@ -125,13 +97,7 @@ fn get_alert_messages(state: State<'_, AppState>) -> Result<Vec<String>, String>
 #[tauri::command]
 fn get_monitoring_status(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     let monitoring_active = *state.monitoring_active.lock().unwrap();
-    let background_monitoring = *state.background_monitoring.lock().unwrap();
-    let power_save_mode = *state.power_save_mode.lock().unwrap();
-    Ok(serde_json::json!({
-        "active": monitoring_active,
-        "background": background_monitoring,
-        "power_save": power_save_mode
-    }))
+    Ok(serde_json::json!({ "active": monitoring_active }))
 }
 
 #[tauri::command]
@@ -153,18 +119,24 @@ async fn save_calibrated_image(handle: tauri::AppHandle, image_data: String) -> 
     Ok(file_path.to_string_lossy().into_owned())
 }
 
-async fn background_monitoring_task(app_handle: AppHandle, state: AppState) {
+async fn background_alert_task(app_handle: AppHandle, state: AppState) {
     let mut interval = interval(Duration::from_secs(3));
     loop {
         interval.tick().await;
-        if !*state.background_monitoring.lock().unwrap() { continue; }
-        info!("백그라운드 자세 체크 수행");
-        let messages = {
+        let messages_to_send = {
             let mut alert_messages = state.alert_messages.lock().unwrap();
-            if !alert_messages.is_empty() { let messages = alert_messages.clone(); alert_messages.clear(); Some(messages) } else { None }
+            if !alert_messages.is_empty() {
+                let messages = alert_messages.clone();
+                alert_messages.clear();
+                Some(messages)
+            } else {
+                None
+            }
         };
-        if let Some(messages) = messages {
+
+        if let Some(messages) = messages_to_send {
             for message in messages {
+                info!("백그라운드 알림 발생: {}", &message);
                 let _ = app_handle.emit("posture-alert", &message);
             }
         }
@@ -178,6 +150,8 @@ fn main() {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init()) 
+        .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_log::Builder::new()
             .targets([Target::new(TargetKind::Stdout), Target::new(TargetKind::Webview)])
             .level(LevelFilter::Info).build())
@@ -191,6 +165,7 @@ pub fn run() {
                 vec![Migration {
                     version: 1,
                     description: "create posture log table",
+                    // ★★★★★ 수정: 안정적인 원본 SQL문으로 복원 ★★★★★
                     sql: "CREATE TABLE IF NOT EXISTS posture_log (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             score INTEGER NOT NULL,
@@ -201,24 +176,19 @@ pub fn run() {
                     kind: MigrationKind::Up,
                 }],
             ).build())
-        // ★★★★★ 여기가 수정된 부분입니다 ★★★★★
         .setup(|app| {
             let app_state = AppState {
                 pose_analyzer: Arc::new(PoseAnalyzer::new()),
                 monitoring_active: Arc::new(Mutex::new(false)),
-                background_monitoring: Arc::new(Mutex::new(false)),
                 last_alert_time: Arc::new(Mutex::new(Instant::now() - Duration::from_secs(60))),
                 alert_messages: Arc::new(Mutex::new(Vec::new())),
-                power_save_mode: Arc::new(Mutex::new(true)),
             };
             
-            // AppState 자체를 manage 합니다.
             app.manage(app_state.clone());
             
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                // background_monitoring_task에는 복제된 AppState를 넘겨줍니다.
-                background_monitoring_task(app_handle, app_state).await;
+                background_alert_task(app_handle, app_state).await;
             });
 
             info!("Pose Nudge 애플리케이션 초기화 완료");
@@ -228,9 +198,6 @@ pub fn run() {
             initialize_pose_model,
             start_monitoring,
             stop_monitoring,
-            start_background_monitoring,
-            stop_background_monitoring,
-            set_power_save_mode,
             analyze_pose_data,
             get_pose_recommendations,
             get_alert_messages,

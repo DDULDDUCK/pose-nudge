@@ -41,3 +41,5 @@ thiserror = "2.0.16" # 에러 처리를 위해 추가
 tauri-plugin-store = "2"
 tauri-plugin-fs = "2.0.0-beta.5"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+tauri-plugin-shell = "2"
+tauri-plugin-os = "2"

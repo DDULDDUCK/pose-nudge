@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { Activity, Bell, Settings, Clock, Target, AlertCircle, CheckCircle, RefreshCw, Sparkles, LineChart } from 'lucide-react';
+import { Activity, Bell, Clock, Target, AlertCircle, CheckCircle, RefreshCw, Sparkles, LineChart } from 'lucide-react';
 import { ResponsiveContainer, LineChart as RechartsLineChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line } from 'recharts';
 
 // 컴포넌트 내부에서 사용할 타입 정의
@@ -59,7 +59,6 @@ const Dashboard: React.FC = () => {
       const todayStart = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
       const sixDaysAgo = Math.floor(new Date(new Date().setDate(new Date().getDate() - 5)).setHours(0,0,0,0) / 1000);
 
-      // 1. 통계 데이터와 차트 데이터를 병렬로 쿼리
       const [statsResult, chartResult, recs] = await Promise.all([
         db.select<any[]>(`
             SELECT
@@ -83,8 +82,7 @@ const Dashboard: React.FC = () => {
         invoke<string[]>('get_pose_recommendations')
       ]);
 
-      // 2. 쿼리 결과 처리
-      const rawStats = statsResult[0];
+      const rawStats = statsResult[0] || {};
       setStats({
           total_sessions: rawStats.total_sessions || 0,
           average_posture_score: Math.round(rawStats.average_posture_score || 0),
@@ -98,7 +96,7 @@ const Dashboard: React.FC = () => {
 
     } catch (err) {
       console.error('대시보드 데이터 로드 실패:', err);
-      setError('대시보드 데이터를 불러올 수 없습니다. ' + (err as Error).message);
+      setError('대시보드 데이터를 불러올 수 없습니다. 데이터가 아직 없거나, 데이터베이스 연결에 실패했습니다.');
     } finally {
       setLoading(false);
     }
@@ -131,41 +129,31 @@ const Dashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-[60vh]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6 bg-slate-50 min-h-screen">
-      {/* 헤더 */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">대시보드</h1>
-          <p className="text-muted-foreground">안녕하세요, 사용자님! 오늘의 자세 현황을 확인해보세요.</p>
-        </div>
-        <div className="flex items-center gap-2 mt-4 sm:mt-0">
-          <Button variant="outline" size="sm" onClick={loadDashboardData} className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            새로고침
-          </Button>
-          <Button variant="outline" size="sm" className="gap-2">
-            <Settings className="h-4 w-4" />
-            설정
-          </Button>
-        </div>
+    <div className="space-y-6">
+      {/* 컨트롤 버튼 */}
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={loadDashboardData} className="gap-2">
+          <RefreshCw className="h-4 w-4" />
+          새로고침
+        </Button>
       </div>
       
-      {error && (
+      {error && !stats && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
-      {/* 메인 그리드 (stats가 null이 아님을 보장) */}
-      {stats && (
+      {/* 메인 그리드 */}
+      {stats ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* 왼쪽: 메인 점수 및 추천 */}
           <div className="lg:col-span-1 space-y-6">
@@ -173,7 +161,7 @@ const Dashboard: React.FC = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Target className="h-5 w-5 text-blue-600" />
-                  평균 자세 점수
+                  오늘의 평균 자세 점수
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col items-center justify-center space-y-4">
@@ -181,7 +169,7 @@ const Dashboard: React.FC = () => {
                   <svg className="h-full w-full" viewBox="0 0 100 100">
                     <circle className="stroke-current text-gray-200" strokeWidth="10" cx="50" cy="50" r="40" fill="transparent"></circle>
                     <circle
-                      className={`stroke-current ${getScoreRingColor(stats.average_posture_score)}`}
+                      className={`stroke-current ${getScoreRingColor(stats.average_posture_score)} transition-all duration-500`}
                       strokeWidth="10" cx="50" cy="50" r="40" fill="transparent"
                       strokeDasharray={2 * Math.PI * 40}
                       strokeDashoffset={2 * Math.PI * 40 * (1 - (stats.average_posture_score || 0) / 100)}
@@ -204,14 +192,18 @@ const Dashboard: React.FC = () => {
             <Card>
               <CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-yellow-500" /> 자세 개선 팁</CardTitle></CardHeader>
               <CardContent>
-                <ul className="space-y-3">
-                  {recommendations.map((rec, index) => (
-                    <li key={index} className="flex items-start gap-3">
-                      <CheckCircle className="h-5 w-5 text-emerald-500 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm text-muted-foreground">{rec}</span>
-                    </li>
-                  ))}
-                </ul>
+                {recommendations.length > 0 ? (
+                  <ul className="space-y-3">
+                    {recommendations.map((rec, index) => (
+                      <li key={index} className="flex items-start gap-3">
+                        <CheckCircle className="h-5 w-5 text-emerald-500 mt-0.5 flex-shrink-0" />
+                        <span className="text-sm text-muted-foreground">{rec}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-center text-muted-foreground py-4">데이터를 분석하여 맞춤 팁을 제공해 드립니다.</p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -264,6 +256,12 @@ const Dashboard: React.FC = () => {
             </Card>
           </div>
         </div>
+      ) : (
+        !error && (
+            <div className="text-center py-20">
+                <p className="text-muted-foreground">대시보드 데이터를 불러오는 중이거나, 표시할 데이터가 없습니다.</p>
+            </div>
+        )
       )}
     </div>
   );

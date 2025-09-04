@@ -1,12 +1,13 @@
+// src/components/WebcamCapture.tsx
+
 import React, { useRef, useCallback, useState, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { load, Store } from '@tauri-apps/plugin-store'; // Store 타입을 명시적으로 import
+import { load, Store } from '@tauri-apps/plugin-store';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -20,13 +21,10 @@ import {
   XCircle,
   PlayCircle,
   StopCircle,
-  Settings2,
   Lightbulb,
   Cpu,
   ZoomIn,
 } from 'lucide-react';
-
-// DB 유틸리티 함수를 import 합니다.
 import { getDb } from '@/lib/db';
 
 // --- 인터페이스 정의 ---
@@ -41,18 +39,10 @@ interface PostureAnalysis {
 
 interface MonitoringStatus {
   active: boolean;
-  background: boolean;
-  power_save: boolean;
 }
 
 // --- 상태 표시 UI 컴포넌트 ---
-interface StatusItemProps {
-  label: string;
-  isBad: boolean;
-  detectedText?: string;
-}
-
-const StatusItem: React.FC<StatusItemProps> = ({ label, isBad, detectedText }) => (
+const StatusItem: React.FC<{ label: string; isBad: boolean; detectedText?: string; }> = ({ label, isBad, detectedText }) => (
   <div className="flex items-center justify-between rounded-lg p-3 bg-slate-50">
     <span className="text-sm font-medium text-slate-700">{label}</span>
     <div className={`flex items-center gap-2 text-sm font-semibold ${isBad ? 'text-red-500' : 'text-emerald-500'}`}>
@@ -69,8 +59,6 @@ const WebcamCapture: React.FC = () => {
   // --- State 정의 ---
   const webcamRef = useRef<Webcam>(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
-  const [isBackgroundMonitoring, setIsBackgroundMonitoring] = useState(false);
-  const [isPowerSaveMode, setIsPowerSaveMode] = useState(true);
   const [isWebcamReady, setIsWebcamReady] = useState(false);
   const [isModelInitialized, setIsModelInitialized] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<PostureAnalysis | null>(null);
@@ -81,7 +69,6 @@ const WebcamCapture: React.FC = () => {
   const [calibratedImage, setCalibratedImage] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
-  // --- 핵심 로직 함수들 (useCallback으로 최적화) ---
   const videoConstraints = { width: 640, height: 480, facingMode: 'user' };
 
   const initializeModel = useCallback(async () => {
@@ -115,25 +102,22 @@ const WebcamCapture: React.FC = () => {
       if (!parsedResult.skip) {
         setAnalysisResult(parsedResult);
         
-        // 분석 결과를 DB에 저장합니다.
-        try {
-          const db = await getDb();
-          await db.execute(
-            "INSERT INTO posture_log (score, is_turtle_neck, is_shoulder_misaligned, timestamp) VALUES ($1, $2, $3, $4)",
-            [
-              parsedResult.posture_score,
-              parsedResult.turtle_neck,
-              parsedResult.shoulder_misalignment,
-              Math.floor(Date.now() / 1000)
-            ]
-          );
-        } catch (dbError) {
-          console.error("DB 저장 실패:", dbError);
-        }
+        const db = await getDb();
+        await db.execute(
+          "INSERT INTO posture_log (score, is_turtle_neck, is_shoulder_misaligned, timestamp) VALUES ($1, $2, $3, $4)",
+          [
+            parsedResult.posture_score,
+            parsedResult.turtle_neck,
+            parsedResult.shoulder_misalignment,
+            Math.floor(Date.now() / 1000)
+          ]
+        );
       }
       setError('');
     } catch (err) {
-      setError(`자세 분석 중 오류 발생: ${err instanceof Error ? err.message : String(err)}`);
+      console.error("분석 또는 DB 저장 실패:", err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(`자세 분석 중 오류 발생: ${errorMessage}`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -155,20 +139,6 @@ const WebcamCapture: React.FC = () => {
     } catch (err) { setError('모니터링 중지에 실패했습니다.'); }
   }, []);
 
-  const handleBackgroundMonitoringToggle = useCallback(async (checked: boolean) => {
-    try {
-      await invoke(checked ? 'start_background_monitoring' : 'stop_background_monitoring');
-      setIsBackgroundMonitoring(checked);
-    } catch (err) { setError('백그라운드 모니터링 설정에 실패했습니다.'); }
-  }, []);
-
-  const handlePowerSaveModeToggle = useCallback(async (checked: boolean) => {
-    try {
-      await invoke('set_power_save_mode', { enabled: checked });
-      setIsPowerSaveMode(checked);
-    } catch (err) { setError('전력 절약 모드 설정에 실패했습니다.'); }
-  }, []);
-
   const handleCalibrate = useCallback(async () => {
     if (!webcamRef.current || !isModelInitialized || !store) {
       setError('모델, 웹캠 또는 저장소가 준비되지 않았습니다.');
@@ -182,7 +152,7 @@ const WebcamCapture: React.FC = () => {
       
       const filePath = await invoke<string>('save_calibrated_image', { imageData: imageSrc });
       await invoke('calibrate_user_posture', { imageData: imageSrc });
-      const imageUrl = await convertFileSrc(filePath);
+      const imageUrl = convertFileSrc(filePath);
       const cacheBustedUrl = `${imageUrl}?t=${new Date().getTime()}`;
 
       await store.set('calibratedImagePath', filePath);
@@ -190,12 +160,12 @@ const WebcamCapture: React.FC = () => {
 
       setCalibratedImage(cacheBustedUrl);
       setCalibrationStatus('success');
-      setTimeout(() => setCalibrationStatus('idle'), 3000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       setError(`자세 캘리브레이션에 실패했습니다: ${errorMessage}`);
       setCalibrationStatus('error');
-      setTimeout(() => setCalibrationStatus('idle'), 3000);
+    } finally {
+        setTimeout(() => setCalibrationStatus('idle'), 3000);
     }
   }, [isModelInitialized, store]);
 
@@ -203,30 +173,25 @@ const WebcamCapture: React.FC = () => {
     const loadInitialData = async () => {
       try {
         const storeInstance = await load('.settings.dat');
-
         setStore(storeInstance);
 
         const savedImagePath = await storeInstance.get<string>('calibratedImagePath');
         if (savedImagePath) {
-          const imageUrl = await convertFileSrc(savedImagePath);
+          const imageUrl = convertFileSrc(savedImagePath);
           const cacheBustedUrl = `${imageUrl}?t=${new Date().getTime()}`;
           setCalibratedImage(cacheBustedUrl);
         }
       
         const status = await invoke<MonitoringStatus>('get_monitoring_status');
         setIsMonitoring(status.active);
-        setIsBackgroundMonitoring(status.background);
-        setIsPowerSaveMode(status.power_save);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        console.error('초기 데이터 로드 실패:', errorMessage);
-        setError(`설정 또는 상태를 불러오는 데 실패했습니다: ${errorMessage}`);
+        console.error('초기 데이터 로드 실패:', err);
       }
     };
     loadInitialData();
 
-    const unlistenPromise = listen('posture-alert', (event) => {
-      setError(event.payload as string);
+    const unlistenPromise = listen<string>('posture-alert', (event) => {
+      setError(event.payload);
       setTimeout(() => setError(''), 5000);
     });
     return () => { 
@@ -237,7 +202,7 @@ const WebcamCapture: React.FC = () => {
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (isMonitoring && isModelInitialized) {
-      interval = setInterval(() => captureAndAnalyze(false), 3000); // 3초 간격
+      interval = setInterval(() => captureAndAnalyze(false), 3000);
     }
     return () => { if (interval) clearInterval(interval); };
   }, [isMonitoring, isModelInitialized, captureAndAnalyze]);
@@ -257,19 +222,13 @@ const WebcamCapture: React.FC = () => {
     if (score >= 60) return 'ring-amber-500';
     return 'ring-red-500';
   };
+  
   const isReadyToMonitor = isWebcamReady && isModelInitialized;
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 bg-slate-50 min-h-screen">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">실시간 자세 분석</h1>
-          <p className="text-muted-foreground">웹캠을 통해 실시간으로 자세를 분석하고 교정합니다.</p>
-        </div>
-      </div>
-
+    <div className="space-y-6">
       {error && (
-        <Alert variant="destructive" className="mb-6">
+        <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
@@ -286,7 +245,7 @@ const WebcamCapture: React.FC = () => {
                 videoConstraints={videoConstraints} 
                 onUserMedia={onUserMedia} 
                 onUserMediaError={onUserMediaError} 
-                className="w-full h-auto aspect-video transition-all" 
+                className="w-full h-auto aspect-video transition-all bg-slate-200" 
                 screenshotFormat="image/jpeg"
               />
               <div className={`absolute inset-0 transition-all ring-4 ring-inset pointer-events-none ${getPostureStatusColor(analysisResult?.posture_score)}`} />
@@ -345,7 +304,7 @@ const WebcamCapture: React.FC = () => {
                 {isMonitoring ? <StopCircle className="mr-2 h-5 w-5" /> : <PlayCircle className="mr-2 h-5 w-5" />}
                 {isMonitoring ? '모니터링 중지' : '모니터링 시작'}
               </Button>
-              <div className="text-xs text-center text-muted-foreground pt-1">
+              <div className="text-xs text-center text-muted-foreground pt-1 h-4">
                 {!isReadyToMonitor && (initializationProgress || "웹캠과 AI 모델을 준비 중입니다...")}
               </div>
               <div className="flex justify-around text-sm pt-2">
@@ -373,49 +332,6 @@ const WebcamCapture: React.FC = () => {
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Settings2 className="h-5 w-5"/>부가 설정</CardTitle>
-              <CardDescription>앱의 세부 동작을 제어하여 사용자 경험을 최적화합니다.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex items-center justify-between p-3 rounded-lg transition-colors hover:bg-slate-100">
-                <div className="space-y-0.5">
-                  <label htmlFor="bg-monitor" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                    백그라운드 모니터링
-                    <span className={`ml-2 text-xs font-bold ${isBackgroundMonitoring ? 'text-blue-600' : 'text-slate-500'}`}>
-                      {isBackgroundMonitoring ? '활성화' : '비활성화'}
-                    </span>
-                  </label>
-                  <p className="text-xs text-muted-foreground">앱이 최소화 상태일 때도 자세 분석을 계속합니다.</p>
-                </div>
-                <Switch 
-                  id="bg-monitor" 
-                  checked={isBackgroundMonitoring} 
-                  onCheckedChange={handleBackgroundMonitoringToggle} 
-                  disabled={!isModelInitialized}
-                  aria-label="백그라운드 모니터링 토글"
-                />
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-lg transition-colors hover:bg-slate-100">
-                <div className="space-y-0.5">
-                  <label htmlFor="power-save" className="text-sm font-medium leading-none">
-                    적응형 전력 절약
-                    <span className={`ml-2 text-xs font-bold ${isPowerSaveMode ? 'text-blue-600' : 'text-slate-500'}`}>
-                      {isPowerSaveMode ? '활성화' : '비활성화'}
-                    </span>
-                  </label>
-                  <p className="text-xs text-muted-foreground">사용자 움직임이 없을 때 분석 빈도를 줄여 리소스를 아낍니다.</p>
-                </div>
-                <Switch
-                  id="power-save"
-                  checked={isPowerSaveMode}
-                  onCheckedChange={handlePowerSaveModeToggle}
-                  aria-label="적응형 전력 절약 모드 토글"
-                />
-              </div>
             </CardContent>
           </Card>
         </div>
