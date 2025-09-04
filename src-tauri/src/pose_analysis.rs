@@ -290,7 +290,7 @@ impl PoseAnalyzer {
         let is_face_too_close = {
             if let Some(baseline_ratio) = *self.baseline_face_shoulder_ratio.lock() {
                 if let Some(current_ratio) = self.calculate_face_shoulder_ratio(keypoints) {
-                    const RATIO_TOLERANCE: f32 = 0.04;
+                    const RATIO_TOLERANCE: f32 = 0.030;
                     current_ratio > baseline_ratio + RATIO_TOLERANCE
                 } else { false }
             } else { false }
@@ -298,7 +298,7 @@ impl PoseAnalyzer {
         let is_head_forward = {
             if let Some(baseline_forward) = *self.baseline_head_forward_ratio.lock() {
                 if let Some(current_forward) = self.calculate_head_forward_ratio(keypoints) {
-                    const FORWARD_TOLERANCE: f32 = 0.03;
+                    const FORWARD_TOLERANCE: f32 = 0.020;
                     current_forward > baseline_forward + FORWARD_TOLERANCE
                 } else { false }
             } else {
@@ -320,8 +320,8 @@ impl PoseAnalyzer {
         if face_height_proxy < 1.0 { return false; }
         let corrected_ratio = shoulder_height_diff / face_height_proxy;
         if let Some(baseline_corrected_ratio) = *self.baseline_shoulder_alignment.lock() {
-            const TOLERANCE: f32 = 0.1;
-            const MIN_ABSOLUTE_THRESHOLD: f32 = 0.2;
+            const TOLERANCE: f32 = 0.9;
+            const MIN_ABSOLUTE_THRESHOLD: f32 = 0.18;
             let is_worse_than_baseline = corrected_ratio > baseline_corrected_ratio + TOLERANCE;
             let is_objectively_bad = corrected_ratio > MIN_ABSOLUTE_THRESHOLD;
             is_worse_than_baseline && is_objectively_bad

@@ -39,6 +39,14 @@ const NotificationItem: React.FC<NotificationProps> = ({ message, onClose }) => 
 const NotificationSystem: React.FC = () => {
   const [notifications, setNotifications] = useState<string[]>([]);
 
+  useEffect(() => {
+    const handler = (e: CustomEvent<string>) => {
+      setNotifications(prev => [...prev, e.detail]);
+    };
+    window.addEventListener('pose-nudge-toast', handler as EventListener);
+    return () => window.removeEventListener('pose-nudge-toast', handler as EventListener);
+  }, []);
+
   const checkForAlerts = async () => {
     try {
       const alerts = await invoke<string[]>('get_alert_messages');
@@ -50,7 +58,7 @@ const NotificationSystem: React.FC = () => {
           alerts.forEach(alert => {
             new Notification('자세 교정 알림', {
               body: alert,
-              icon: '/tauri.svg'
+              icon: '/logo.png'
             });
           });
         }

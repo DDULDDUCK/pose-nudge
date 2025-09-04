@@ -5,14 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { isPermissionGranted, sendNotification } from '@tauri-apps/plugin-notification';
+// 언어 설정 유지용
 import { Command, open } from '@tauri-apps/plugin-shell';
 import { platform } from '@tauri-apps/plugin-os';
 
+const LANGUAGE_KEY = "pose_nudge_language";
 // 카메라 설정 컴포넌트 (수정됨)
+import { useTranslation } from 'react-i18next';
+
 const CameraSettings = () => {
+    const { t } = useTranslation();
     const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
-    const [selectedCamera, setSelectedCamera] = useState<string>('');
+    const [selectedCamera, setSelectedCamera] = useState<string>(() => localStorage.getItem('pose_nudge_camera') || '');
     const videoRef = useRef<HTMLVideoElement>(null);
 
     // 카메라 장치 목록을 가져오는 함수
@@ -91,26 +95,29 @@ const CameraSettings = () => {
     return (
         <Card>
             <CardHeader>
-                <CardTitle>카메라 설정</CardTitle>
+                <CardTitle>{t('settings.cameraTitle', '카메라 설정')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-800">
-                    <p>카메라가 작동하지 않는 경우, 아래 버튼을 클릭하여 시스템 설정에서 앱의 카메라 접근 권한을 허용해주세요.</p>
+                    <p>{t('settings.cameraGuide', '카메라가 작동하지 않는 경우, 아래 버튼을 클릭하여 시스템 설정에서 앱의 카메라 접근 권한을 허용해주세요.')}</p>
                     <Button onClick={openCameraSettings} className="mt-2">
-                        카메라 설정으로 이동
+                        {t('settings.cameraGoTo', '카메라 설정으로 이동')}
                     </Button>
                 </div>
 
                 <div className="flex items-center justify-between">
-                    <span className="font-medium">사용할 카메라</span>
-                    <Select value={selectedCamera} onValueChange={setSelectedCamera} disabled={cameras.length === 0}>
+                    <span className="font-medium">{t('settings.cameraSelect', '사용할 카메라')}</span>
+                    <Select value={selectedCamera} onValueChange={(value) => {
+                        setSelectedCamera(value);
+                        localStorage.setItem('pose_nudge_camera', value);
+                    }} disabled={cameras.length === 0}>
                         <SelectTrigger className="w-[250px]">
-                            <SelectValue placeholder={cameras.length === 0 ? "사용 가능한 카메라 없음" : "카메라를 선택하세요"} />
+                            <SelectValue placeholder={cameras.length === 0 ? t('settings.cameraNone', '사용 가능한 카메라 없음') : t('settings.cameraSelectPlaceholder', '카메라를 선택하세요')} />
                         </SelectTrigger>
                         <SelectContent>
                             {cameras.map((camera, index) => (
                                 <SelectItem key={camera.deviceId} value={camera.deviceId}>
-                                    {camera.label || `카메라 ${index + 1}`}
+                                    {camera.label || t('settings.cameraDefault', `카메라 ${index + 1}`)}
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -126,7 +133,7 @@ const CameraSettings = () => {
                   />
                   {cameras.length === 0 && (
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <p>카메라를 찾을 수 없습니다.</p>
+                      <p>{t('settings.cameraNotFound', '카메라를 찾을 수 없습니다.')}</p>
                     </div>
                   )}
                 </div>
@@ -137,6 +144,7 @@ const CameraSettings = () => {
 
 // 알림 설정 컴포넌트 (수정됨)
 const NotificationSettings = () => {
+    const { t } = useTranslation();
     const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(true);
 
     // 시스템 알림 설정으로 이동하는 함수
@@ -161,51 +169,26 @@ const NotificationSettings = () => {
         }
     };
 
-    const handleSendTestNotification = async () => {
-        const hasPermission = await isPermissionGranted();
-        if (!hasPermission) {
-            alert('알림을 보내려면 먼저 시스템 설정에서 권한을 허용해야 합니다.');
-            return;
-        }
-
-        if (notificationsEnabled) {
-            try {
-                await sendNotification({
-                    title: '자세 알림 테스트',
-                    body: '알림이 정상적으로 작동합니다!',
-                });
-            } catch (error) {
-                console.error("테스트 알림 전송 중 오류 발생:", error);
-                alert('테스트 알림을 보내는 데 실패했습니다.');
-            }
-        } else {
-            alert('알림이 비활성화되어 있어 테스트 알림을 보낼 수 없습니다.');
-        }
-    };
-
     return (
         <Card>
             <CardHeader>
-                <CardTitle>알림 설정</CardTitle>
+                <CardTitle>{t('settings.notificationTitle', '알림 설정')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-800">
-                    <p>알림이 오지 않는 경우, 아래 버튼을 클릭하여 시스템 설정에서 앱의 알림 권한을 허용해주세요.</p>
+                    <p>{t('settings.notificationGuide', '알림이 오지 않는 경우, 아래 버튼을 클릭하여 시스템 설정에서 앱의 알림 권한을 허용해주세요.')}</p>
                     <Button onClick={openNotificationSettings} className="mt-2">
-                        알림 설정으로 이동
+                        {t('settings.notificationGoTo', '알림 설정으로 이동')}
                     </Button>
                 </div>
 
                 <div className="flex items-center justify-between">
-                    <span className="font-medium">자세 교정 알림</span>
+                    <span className="font-medium">{t('settings.notificationSwitch', '자세 교정 알림')}</span>
                     <Switch
                         checked={notificationsEnabled}
                         onCheckedChange={setNotificationsEnabled}
                     />
                 </div>
-                <Button onClick={handleSendTestNotification}>
-                    테스트 알림 보내기
-                </Button>
             </CardContent>
         </Card>
     );
@@ -213,9 +196,49 @@ const NotificationSettings = () => {
 
 
 // 메인 설정 페이지 컴포넌트
+
+const LanguageSettings = () => {
+    const { i18n, t } = useTranslation();
+    const [lang, setLang] = useState(() => localStorage.getItem(LANGUAGE_KEY) || i18n.language);
+
+    const handleChange = (value: string) => {
+        i18n.changeLanguage(value);
+        setLang(value);
+        localStorage.setItem(LANGUAGE_KEY, value);
+    };
+
+    useEffect(() => {
+        const savedLang = localStorage.getItem(LANGUAGE_KEY);
+        if (savedLang && savedLang !== i18n.language) {
+            i18n.changeLanguage(savedLang);
+            setLang(savedLang);
+        }
+    }, [i18n]);
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>{t('settings.languageTitle', '언어 설정')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <Select value={lang} onValueChange={handleChange}>
+                    <SelectTrigger className="w-[250px]">
+                        <SelectValue placeholder={t('settings.languagePlaceholder', '언어를 선택하세요')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="ko">{t('settings.languageKorean', '한국어')}</SelectItem>
+                        <SelectItem value="en">{t('settings.languageEnglish', 'English')}</SelectItem>
+                    </SelectContent>
+                </Select>
+            </CardContent>
+        </Card>
+    );
+};
+
 const SettingsPage = () => {
     return (
         <div className="space-y-6">
+            <LanguageSettings />
             <CameraSettings />
             <NotificationSettings />
         </div>

@@ -9,12 +9,12 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Activity, Bell, Clock, Target, AlertCircle, CheckCircle, RefreshCw, Sparkles, LineChart } from 'lucide-react';
 import { ResponsiveContainer, LineChart as RechartsLineChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line } from 'recharts';
-
+import { useTranslation } from 'react-i18next';
 // 컴포넌트 내부에서 사용할 타입 정의
 interface DashboardStats {
   total_sessions: number;
   average_posture_score: number;
-  alerts_today: number;
+  detection_count_today: number;
   session_time: number;
   good_posture_time: number;
 }
@@ -40,9 +40,16 @@ const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string |
 
 
 const Dashboard: React.FC = () => {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [chartData, setChartData] = useState<DailyScore[]>([]);
-  const [recommendations, setRecommendations] = useState<string[]>([]);
+  const recommendations = [
+    "tip1",
+    "tip2",
+    "tip3",
+    "tip4",
+    "tip5"
+  ];
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
@@ -59,12 +66,12 @@ const Dashboard: React.FC = () => {
       const todayStart = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
       const sixDaysAgo = Math.floor(new Date(new Date().setDate(new Date().getDate() - 5)).setHours(0,0,0,0) / 1000);
 
-      const [statsResult, chartResult, recs] = await Promise.all([
+      const [statsResult, chartResult] = await Promise.all([
         db.select<any[]>(`
             SELECT
                 (SELECT COUNT(DISTINCT date(timestamp, 'unixepoch')) FROM posture_log) as total_sessions,
                 AVG(CASE WHEN timestamp >= $1 THEN score ELSE NULL END) as average_posture_score,
-                SUM(CASE WHEN (is_turtle_neck = 1 OR is_shoulder_misaligned = 1) AND timestamp >= $1 THEN 1 ELSE 0 END) as alerts_today,
+                SUM(CASE WHEN (is_turtle_neck = 1 OR is_shoulder_misaligned = 1) AND timestamp >= $1 THEN 1 ELSE 0 END) as detection_count_today,
                 COUNT(CASE WHEN timestamp >= $1 THEN 1 ELSE NULL END) as records_today,
                 SUM(CASE WHEN score >= 80 AND timestamp >= $1 THEN 1 ELSE 0 END) as good_records_today
             FROM posture_log
@@ -86,27 +93,27 @@ const Dashboard: React.FC = () => {
       setStats({
           total_sessions: rawStats.total_sessions || 0,
           average_posture_score: Math.round(rawStats.average_posture_score || 0),
-          alerts_today: rawStats.alerts_today || 0,
+          detection_count_today: rawStats.detection_count_today || 0,
           session_time: Math.floor(((rawStats.records_today || 0) * 3) / 60),
           good_posture_time: Math.floor(((rawStats.good_records_today || 0) * 3) / 60)
       });
 
       setChartData(chartResult);
-      setRecommendations(recs);
+      // setRecommendations(recs); // 더 이상 백엔드에서 받아오지 않음
 
     } catch (err) {
       console.error('대시보드 데이터 로드 실패:', err);
-      setError('대시보드 데이터를 불러올 수 없습니다. 데이터가 아직 없거나, 데이터베이스 연결에 실패했습니다.');
+      setError(t('dashboard.loadingError'));
     } finally {
       setLoading(false);
     }
   };
 
   const formatTime = (minutes: number): string => {
-    if (minutes < 60) return `${minutes}분`;
+    if (minutes < 60) return t('dashboard.timeFormat.minutes', { count: minutes });
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    return `${hours}시간 ${mins}분`;
+    return t('dashboard.timeFormat.hoursMinutes', { hours, minutes: mins });
   };
 
   const getScoreColor = (score: number): string => {
@@ -122,9 +129,9 @@ const Dashboard: React.FC = () => {
   };
 
   const getMotivationalMessage = (score: number): string => {
-    if (score >= 80) return "훌륭해요! 좋은 자세를 계속 유지하세요.";
-    if (score >= 60) return "좋은 시도에요! 조금만 더 신경 써볼까요?";
-    return "의식적으로 자세를 교정하며 점수를 올려보세요!";
+    if (score >= 80) return t('dashboard.motivation.excellent');
+    if (score >= 60) return t('dashboard.motivation.good');
+    return t('dashboard.motivation.bad');
   };
 
   if (loading) {
@@ -141,7 +148,7 @@ const Dashboard: React.FC = () => {
       <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={loadDashboardData} className="gap-2">
           <RefreshCw className="h-4 w-4" />
-          새로고침
+          {t('dashboard.refresh')}
         </Button>
       </div>
       
@@ -161,7 +168,7 @@ const Dashboard: React.FC = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Target className="h-5 w-5 text-blue-600" />
-                  오늘의 평균 자세 점수
+                  {t('dashboard.scoreTitle')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col items-center justify-center space-y-4">
@@ -180,7 +187,7 @@ const Dashboard: React.FC = () => {
                     <span className={`text-5xl font-bold ${getScoreColor(stats.average_posture_score)}`}>
                       {stats.average_posture_score}
                     </span>
-                    <span className="text-sm text-muted-foreground">/ 100</span>
+                    <span className="text-sm text-muted-foreground">{t('dashboard.scoreUnit')}</span>
                   </div>
                 </div>
                 <p className="text-center text-muted-foreground px-4">
@@ -190,19 +197,19 @@ const Dashboard: React.FC = () => {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-yellow-500" /> 자세 개선 팁</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-yellow-500" /> {t('dashboard.tipsTitle')}</CardTitle></CardHeader>
               <CardContent>
                 {recommendations.length > 0 ? (
                   <ul className="space-y-3">
                     {recommendations.map((rec, index) => (
                       <li key={index} className="flex items-start gap-3">
                         <CheckCircle className="h-5 w-5 text-emerald-500 mt-0.5 flex-shrink-0" />
-                        <span className="text-sm text-muted-foreground">{rec}</span>
+                        <span className="text-sm text-muted-foreground">{t(`dashboard.tips.${rec}`, rec)}</span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-sm text-center text-muted-foreground py-4">데이터를 분석하여 맞춤 팁을 제공해 드립니다.</p>
+                  <p className="text-sm text-center text-muted-foreground py-4">{t('dashboard.noTips')}</p>
                 )}
               </CardContent>
             </Card>
@@ -211,15 +218,15 @@ const Dashboard: React.FC = () => {
           {/* 오른쪽: 상세 통계 */}
           <div className="lg:col-span-2 space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-              <StatCard icon={<Activity />} title="총 세션" value={stats.total_sessions} description="지금까지의 누적 세션" />
-              <StatCard icon={<Bell />} title="오늘 알림" value={stats.alerts_today} description="자세 교정 알림 횟수" />
-              <StatCard icon={<Clock />} title="총 사용 시간" value={formatTime(stats.session_time)} description="오늘의 총 세션 시간" />
+              <StatCard icon={<Activity />} title={t('dashboard.stats.totalSessions')} value={stats.total_sessions} description={t('dashboard.stats.totalSessionsDesc')} />
+              <StatCard icon={<Bell />} title={t('dashboard.stats.todayDetectionCount')} value={stats.detection_count_today} description={t('dashboard.stats.todayDetectionCountDesc')} />
+              <StatCard icon={<Clock />} title={t('dashboard.stats.totalTime')} value={formatTime(stats.session_time)} description={t('dashboard.stats.totalTimeDesc')} />
             </div>
 
             <Card>
               <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><LineChart className="h-5 w-5" /> 자세 점수 추이</CardTitle>
-                  <CardDescription>최근 6일간의 자세 점수 변화입니다.</CardDescription>
+                  <CardTitle className="flex items-center gap-2"><LineChart className="h-5 w-5" /> {t('dashboard.chartTitle')}</CardTitle>
+                  <CardDescription>{t('dashboard.chartDesc')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
@@ -229,25 +236,25 @@ const Dashboard: React.FC = () => {
                     <YAxis stroke="#888888" fontSize={12} domain={[0, 100]} />
                     <Tooltip contentStyle={{ backgroundColor: "rgba(255, 255, 255, 0.8)", border: "1px solid #ccc", borderRadius: "0.5rem", }} />
                     <Legend />
-                    <Line type="monotone" dataKey="score" stroke="#10b981" strokeWidth={2} name="자세 점수" />
+                    <Line type="monotone" dataKey="score" stroke="#10b981" strokeWidth={2} name={t('dashboard.chartLegend')} />
                   </RechartsLineChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
             
             <Card>
-              <CardHeader><CardTitle>오늘의 자세 분석</CardTitle></CardHeader>
+              <CardHeader><CardTitle>{t('dashboard.analysisTitle')}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                   <div>
                       <div className="flex justify-between mb-1">
-                          <span className="text-sm font-medium text-emerald-600">좋은 자세</span>
+                          <span className="text-sm font-medium text-emerald-600">{t('dashboard.goodPosture')}</span>
                           <span className="text-sm font-medium text-emerald-600">{formatTime(stats.good_posture_time)}</span>
                       </div>
                       <Progress value={stats.session_time > 0 ? (stats.good_posture_time / stats.session_time) * 100 : 0} className="[&>div]:bg-emerald-500" />
                   </div>
                   <div>
                       <div className="flex justify-between mb-1">
-                          <span className="text-sm font-medium text-red-600">개선 필요</span>
+                          <span className="text-sm font-medium text-red-600">{t('dashboard.badPosture')}</span>
                           <span className="text-sm font-medium text-red-600">{formatTime(stats.session_time - stats.good_posture_time)}</span>
                       </div>
                       <Progress value={stats.session_time > 0 ? ((stats.session_time - stats.good_posture_time) / stats.session_time) * 100 : 0} className="[&>div]:bg-red-500" />
@@ -259,7 +266,7 @@ const Dashboard: React.FC = () => {
       ) : (
         !error && (
             <div className="text-center py-20">
-                <p className="text-muted-foreground">대시보드 데이터를 불러오는 중이거나, 표시할 데이터가 없습니다.</p>
+                <p className="text-muted-foreground">{t('dashboard.noData')}</p>
             </div>
         )
       )}
