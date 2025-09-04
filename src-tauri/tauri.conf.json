@@ -41,7 +41,8 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "../models"
+      "../models",
+      "../locales"
     ]
   },
   "plugins": {

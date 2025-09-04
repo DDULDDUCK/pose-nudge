@@ -42,10 +42,14 @@ const StatusItem: React.FC<{ label: string; isBad: boolean; detectedText?: strin
   const { t } = useTranslation();
   return (
     <div className="flex items-center justify-between rounded-lg p-3 bg-slate-50">
-      <span className="text-sm font-medium text-slate-700">{t(label, label)}</span>
+      <span className="text-sm font-medium text-slate-700">{t(label)}</span>
       <div className={`flex items-center gap-2 text-sm font-semibold ${isBad ? 'text-red-500' : 'text-emerald-500'}`}>
         {isBad ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
-        <span>{isBad ? t(detectedText || 'detected', detectedText || '감지됨') : t('normal', '정상')}</span>
+        <span>
+          {isBad
+            ? (detectedText ? t(detectedText) : t('webcam.detected', 'Detected'))
+            : t('webcam.normal', 'Normal')}
+        </span>
       </div>
     </div>
   );
@@ -233,7 +237,14 @@ const WebcamCapture: React.FC = () => {
                       <div className="p-3 bg-blue-50 rounded-lg">
                         <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-blue-800"><Lightbulb className="h-4 w-4"/>{t('dashboard.tipsTitle', '개선 팁')}</h4>
                         <ul className="space-y-1 text-xs text-blue-700 list-disc list-inside">
-                          {analysisResult.recommendations.map((rec, i) => <li key={i}>{t(`dashboard.tips.${rec}`, rec)}</li>)}
+                          {analysisResult.recommendations.map((rec, i) => (
+                            <li key={i}>
+                              {t(
+                                // dotted key (e.g. "motivation.excellent") => dashboard.<dotted>
+                                rec.includes('.') ? `dashboard.${rec}` : `dashboard.tips.${rec}`
+                              )}
+                            </li>
+                          ))}
                         </ul>
                       </div>
                     )}

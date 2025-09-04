@@ -66,8 +66,9 @@
   "app": {
     "logoAlt": "Pose Nudge 로고",
     "title": "Pose Nudge",
-    "slogan": "건강한 자세로 더 나은 삶을"
+    "slogan": "건강한 자세로 더 나은 삶"
   },
+  "detected": "감지됨",
   "settings": {
     "languageTitle": "언어 설정",
     "languagePlaceholder": "언어를 선택하세요",
@@ -121,12 +122,16 @@
     "realtimeStatus": "실시간 분석 현황",
     "currentDetected": "현재 감지된 자세 정보입니다.",
     "startMonitoringDesc": "모니터링을 시작하면 분석 결과가 표시됩니다.",
+    "startMonitoringDescTray": "시스템 트레이 아이콘으로 모니터링을 시작하면 분석 결과가 표시됩니다.",
     "turtleNeck": "거북목",
     "shoulderMisalign": "어깨 비대칭",
     "caution": "주의",
     "imbalance": "불균형",
     "normal": "정상",
     "monitoringInactive": "모니터링 비활성화 상태",
+    "monitoringActiveStatus": "모니터링 활성화 중",
+    "monitoringInactiveStatus": "모니터링 비활성화 중",
+    "trayControlGuide": "시스템 트레이 아이콘으로 모니터링을 제어하세요.",
     "controlPanel": "컨트롤 패널",
     "stopMonitoring": "모니터링 중지",
     "startMonitoring": "모니터링 시작",

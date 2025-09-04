@@ -65,7 +65,6 @@ pub struct PoseAnalyzer {
     shoulder_alignment_thresholds: Mutex<(f32, f32)>, // 어깨 정렬 감지 강도 (TOLERANCE, MIN_ABSOLUTE_THRESHOLD)
 }
 
-
 impl PoseAnalyzer {
     // 생성자 함수
     pub fn new() -> Self {
@@ -86,7 +85,7 @@ impl PoseAnalyzer {
             baseline_face_shoulder_ratio: Mutex::new(None),
             baseline_shoulder_alignment: Mutex::new(None),
             baseline_head_forward_ratio: Mutex::new(None),
-            
+
             // ✨ 추가된 필드 초기화
             temporal_threshold_count: Mutex::new(DEFAULT_THRESHOLD_COUNT),
             turtle_neck_thresholds: Mutex::new(DEFAULT_TURTLE_THRESHOLDS),
@@ -115,13 +114,13 @@ impl PoseAnalyzer {
         *self.turtle_neck_thresholds.lock() = thresholds;
         info!("거북목 감지 강도 변경: level {}", level);
     }
-    
+
     // ✨ 추가된 함수: 어깨 정렬 감지 강도 설정
     pub fn set_shoulder_sensitivity(&self, level: u8) {
         let thresholds = match level {
-            1 => (1.2, 0.22),  // 느슨하게
-            3 => (0.7, 0.15),  // 엄격하게
-            _ => (0.9, 0.18),  // 보통 (기본값)
+            1 => (1.2, 0.22), // 느슨하게
+            3 => (0.7, 0.15), // 엄격하게
+            _ => (0.9, 0.18), // 보통 (기본값)
         };
         *self.shoulder_alignment_thresholds.lock() = thresholds;
         info!("어깨 정렬 감지 강도 변경: level {}", level);
@@ -156,7 +155,7 @@ impl PoseAnalyzer {
         info!("YOLO11n-pose 모델 로드: {:?}", model_path);
         Ok(model_path)
     }
-    
+
     // 모델 초기화 여부 확인
     pub fn is_model_initialized(&self) -> bool {
         self.session.lock().is_some()
@@ -180,33 +179,40 @@ impl PoseAnalyzer {
             return Ok(serde_json::json!({
                 "status": "model_not_initialized",
                 "recommendations": ["AI 모델을 먼저 초기화해주세요"],
-            }).to_string());
+            })
+            .to_string());
         }
 
         let keypoints = self.extract_pose_keypoints(image_buffer)?;
-        
+
         let current_turtle_neck = self.detect_turtle_neck(&keypoints);
         let current_shoulder_misalignment = self.detect_shoulder_misalignment(&keypoints);
-        let realtime_posture_score = self.calculate_posture_score(current_turtle_neck, current_shoulder_misalignment);
+        let realtime_posture_score =
+            self.calculate_posture_score(current_turtle_neck, current_shoulder_misalignment);
 
         // ✨ 수정: 설정된 알림 빈도(threshold_count)를 사용
         let threshold_count = *self.temporal_threshold_count.lock();
 
         let final_turtle_neck = {
             let mut history = self.recent_turtle_neck_results.lock();
-            if history.len() >= self.temporal_window_size { history.pop_front(); }
+            if history.len() >= self.temporal_window_size {
+                history.pop_front();
+            }
             history.push_back(current_turtle_neck);
             history.iter().filter(|&&detected| detected).count() >= threshold_count
         };
 
         let final_shoulder_misalignment = {
             let mut history = self.recent_shoulder_results.lock();
-            if history.len() >= self.temporal_window_size { history.pop_front(); }
+            if history.len() >= self.temporal_window_size {
+                history.pop_front();
+            }
             history.push_back(current_shoulder_misalignment);
             history.iter().filter(|&&detected| detected).count() >= threshold_count
         };
 
-        let recommendations = self.generate_recommendations(final_turtle_neck, final_shoulder_misalignment);
+        let recommendations =
+            self.generate_recommendations(final_turtle_neck, final_shoulder_misalignment);
         let avg_confidence = self.calculate_average_confidence(&keypoints);
 
         let result = serde_json::json!({
@@ -220,7 +226,7 @@ impl PoseAnalyzer {
 
         Ok(result.to_string())
     }
-    
+
     // Base64 이미지 데이터를 분석하는 래퍼 함수
     pub fn analyze_image_sync(
         &self,
@@ -231,25 +237,41 @@ impl PoseAnalyzer {
     }
 
     // Base64 문자열을 이미지 버퍼로 디코딩
-    fn decode_base64_image(&self, base64_data: &str) -> Result<ImageBuffer<Rgb<u8>, Vec<u8>>, Box<dyn std::error::Error + Send + Sync>> {
-        let base64_clean = if base64_data.starts_with("data:") { base64_data.split(',').nth(1).unwrap_or(base64_data) } else { base64_data };
+    fn decode_base64_image(
+        &self,
+        base64_data: &str,
+    ) -> Result<ImageBuffer<Rgb<u8>, Vec<u8>>, Box<dyn std::error::Error + Send + Sync>> {
+        let base64_clean = if base64_data.starts_with("data:") {
+            base64_data.split(',').nth(1).unwrap_or(base64_data)
+        } else {
+            base64_data
+        };
         let decoded = general_purpose::STANDARD.decode(base64_clean)?;
         let img = image::load_from_memory(&decoded)?;
         Ok(img.to_rgb8())
     }
 
     // 이미지에서 포즈 키포인트 추출
-    fn extract_pose_keypoints(&self, image: &ImageBuffer<Rgb<u8>, Vec<u8>>) -> Result<PoseKeypoints, Box<dyn std::error::Error + Send + Sync>> {
+    fn extract_pose_keypoints(
+        &self,
+        image: &ImageBuffer<Rgb<u8>, Vec<u8>>,
+    ) -> Result<PoseKeypoints, Box<dyn std::error::Error + Send + Sync>> {
         let input_tensor = self.preprocess_image(image)?;
         let mut session_guard = self.session.lock();
-        let session = session_guard.as_mut().ok_or("YOLO-pose 모델이 초기화되지 않았습니다")?;
+        let session = session_guard
+            .as_mut()
+            .ok_or("YOLO-pose 모델이 초기화되지 않았습니다")?;
         let outputs = session.run(ort::inputs!["images" => input_tensor])?;
         self.postprocess_output(&outputs, image.width(), image.height())
     }
 
     // 이미지를 모델 입력 형식에 맞게 전처리
-    fn preprocess_image(&self, image: &ImageBuffer<Rgb<u8>, Vec<u8>>) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
-        let resized_image = image::imageops::resize(image, 640, 640, image::imageops::FilterType::Triangle);
+    fn preprocess_image(
+        &self,
+        image: &ImageBuffer<Rgb<u8>, Vec<u8>>,
+    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+        let resized_image =
+            image::imageops::resize(image, 640, 640, image::imageops::FilterType::Triangle);
         let mut input_data = Vec::with_capacity(3 * 640 * 640);
         for channel in 0..3 {
             for pixel in resized_image.pixels() {
@@ -261,10 +283,19 @@ impl PoseAnalyzer {
     }
 
     // 모델 출력값을 후처리하여 키포인트 데이터로 변환
-    fn postprocess_output(&self, outputs: &SessionOutputs, orig_width: u32, orig_height: u32) -> Result<PoseKeypoints, Box<dyn std::error::Error + Send + Sync>> {
-        let output = outputs.get("output0").ok_or("모델 출력을 찾을 수 없습니다")?;
+    fn postprocess_output(
+        &self,
+        outputs: &SessionOutputs,
+        orig_width: u32,
+        orig_height: u32,
+    ) -> Result<PoseKeypoints, Box<dyn std::error::Error + Send + Sync>> {
+        let output = outputs
+            .get("output0")
+            .ok_or("모델 출력을 찾을 수 없습니다")?;
         let (shape, data) = output.try_extract_tensor::<f32>()?;
-        if shape.len() != 3 || shape[1] != 56 { return Err("예상하지 못한 모델 출력 형식입니다".into()); }
+        if shape.len() != 3 || shape[1] != 56 {
+            return Err("예상하지 못한 모델 출력 형식입니다".into());
+        }
         let detections = shape[2] as usize;
         let mut best_detection = None;
         let mut best_confidence = 0.0f32;
@@ -276,33 +307,154 @@ impl PoseAnalyzer {
                 best_detection = Some(i);
             }
         }
-        let detection_idx = best_detection.ok_or("신뢰할 수 있는 pose detection을 찾을 수 없습니다")?;
+        let detection_idx =
+            best_detection.ok_or("신뢰할 수 있는 pose detection을 찾을 수 없습니다")?;
         let scale_x = orig_width as f32 / 640.0;
         let scale_y = orig_height as f32 / 640.0;
         let keypoints = PoseKeypoints {
             nose: self.extract_keypoint_from_data(data, shape, detection_idx, 0, scale_x, scale_y),
-            left_eye: self.extract_keypoint_from_data(data, shape, detection_idx, 1, scale_x, scale_y),
-            right_eye: self.extract_keypoint_from_data(data, shape, detection_idx, 2, scale_x, scale_y),
-            left_ear: self.extract_keypoint_from_data(data, shape, detection_idx, 3, scale_x, scale_y),
-            right_ear: self.extract_keypoint_from_data(data, shape, detection_idx, 4, scale_x, scale_y),
-            left_shoulder: self.extract_keypoint_from_data(data, shape, detection_idx, 5, scale_x, scale_y),
-            right_shoulder: self.extract_keypoint_from_data(data, shape, detection_idx, 6, scale_x, scale_y),
-            left_elbow: self.extract_keypoint_from_data(data, shape, detection_idx, 7, scale_x, scale_y),
-            right_elbow: self.extract_keypoint_from_data(data, shape, detection_idx, 8, scale_x, scale_y),
-            left_wrist: self.extract_keypoint_from_data(data, shape, detection_idx, 9, scale_x, scale_y),
-            right_wrist: self.extract_keypoint_from_data(data, shape, detection_idx, 10, scale_x, scale_y),
-            left_hip: self.extract_keypoint_from_data(data, shape, detection_idx, 11, scale_x, scale_y),
-            right_hip: self.extract_keypoint_from_data(data, shape, detection_idx, 12, scale_x, scale_y),
-            left_knee: self.extract_keypoint_from_data(data, shape, detection_idx, 13, scale_x, scale_y),
-            right_knee: self.extract_keypoint_from_data(data, shape, detection_idx, 14, scale_x, scale_y),
-            left_ankle: self.extract_keypoint_from_data(data, shape, detection_idx, 15, scale_x, scale_y),
-            right_ankle: self.extract_keypoint_from_data(data, shape, detection_idx, 16, scale_x, scale_y),
+            left_eye: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                1,
+                scale_x,
+                scale_y,
+            ),
+            right_eye: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                2,
+                scale_x,
+                scale_y,
+            ),
+            left_ear: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                3,
+                scale_x,
+                scale_y,
+            ),
+            right_ear: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                4,
+                scale_x,
+                scale_y,
+            ),
+            left_shoulder: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                5,
+                scale_x,
+                scale_y,
+            ),
+            right_shoulder: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                6,
+                scale_x,
+                scale_y,
+            ),
+            left_elbow: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                7,
+                scale_x,
+                scale_y,
+            ),
+            right_elbow: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                8,
+                scale_x,
+                scale_y,
+            ),
+            left_wrist: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                9,
+                scale_x,
+                scale_y,
+            ),
+            right_wrist: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                10,
+                scale_x,
+                scale_y,
+            ),
+            left_hip: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                11,
+                scale_x,
+                scale_y,
+            ),
+            right_hip: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                12,
+                scale_x,
+                scale_y,
+            ),
+            left_knee: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                13,
+                scale_x,
+                scale_y,
+            ),
+            right_knee: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                14,
+                scale_x,
+                scale_y,
+            ),
+            left_ankle: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                15,
+                scale_x,
+                scale_y,
+            ),
+            right_ankle: self.extract_keypoint_from_data(
+                data,
+                shape,
+                detection_idx,
+                16,
+                scale_x,
+                scale_y,
+            ),
         };
         Ok(keypoints)
     }
 
     // 후처리된 데이터에서 특정 키포인트 정보를 추출
-    fn extract_keypoint_from_data(&self, data: &[f32], shape: &ort::tensor::Shape, detection_idx: usize, keypoint_idx: usize, scale_x: f32, scale_y: f32) -> KeyPoint {
+    fn extract_keypoint_from_data(
+        &self,
+        data: &[f32],
+        shape: &ort::tensor::Shape,
+        detection_idx: usize,
+        keypoint_idx: usize,
+        scale_x: f32,
+        scale_y: f32,
+    ) -> KeyPoint {
         let detections = shape[2] as usize;
         let base_feature_idx = 5 + keypoint_idx * 3;
         let x_idx = base_feature_idx * detections + detection_idx;
@@ -316,33 +468,51 @@ impl PoseAnalyzer {
 
     // 주요 키포인트의 평균 신뢰도 계산
     fn calculate_average_confidence(&self, keypoints: &PoseKeypoints) -> f32 {
-        let confidences = vec![ keypoints.nose.confidence, keypoints.left_shoulder.confidence, keypoints.right_shoulder.confidence, keypoints.left_ear.confidence, keypoints.right_ear.confidence, ];
+        let confidences = vec![
+            keypoints.nose.confidence,
+            keypoints.left_shoulder.confidence,
+            keypoints.right_shoulder.confidence,
+            keypoints.left_ear.confidence,
+            keypoints.right_ear.confidence,
+        ];
         let valid_confidences: Vec<f32> = confidences.into_iter().filter(|&c| c > 0.0).collect();
-        if valid_confidences.is_empty() { 0.0 } else { valid_confidences.iter().sum::<f32>() / valid_confidences.len() as f32 }
+        if valid_confidences.is_empty() {
+            0.0
+        } else {
+            valid_confidences.iter().sum::<f32>() / valid_confidences.len() as f32
+        }
     }
 
     // 거북목 감지 로직
     fn detect_turtle_neck(&self, keypoints: &PoseKeypoints) -> bool {
         // ✨ 수정: 설정된 감지 강도(thresholds)를 사용
         let (ratio_tolerance, forward_tolerance) = *self.turtle_neck_thresholds.lock();
-        
+
         let is_face_too_close = {
             if let Some(baseline_ratio) = *self.baseline_face_shoulder_ratio.lock() {
                 if let Some(current_ratio) = self.calculate_face_shoulder_ratio(keypoints) {
                     current_ratio > baseline_ratio + ratio_tolerance
-                } else { false }
-            } else { false }
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
         };
 
         let is_head_forward = {
             if let Some(baseline_forward) = *self.baseline_head_forward_ratio.lock() {
                 if let Some(current_forward) = self.calculate_head_forward_ratio(keypoints) {
                     current_forward > baseline_forward + forward_tolerance
-                } else { false }
+                } else {
+                    false
+                }
             } else {
                 if let Some(current_forward) = self.calculate_head_forward_ratio(keypoints) {
                     current_forward > 0.08 // 캘리브레이션 전 기본값
-                } else { false }
+                } else {
+                    false
+                }
             }
         };
         is_face_too_close || is_head_forward
@@ -350,16 +520,25 @@ impl PoseAnalyzer {
 
     // 어깨 비대칭 감지 로직
     fn detect_shoulder_misalignment(&self, keypoints: &PoseKeypoints) -> bool {
-        if keypoints.left_shoulder.confidence < 0.5 || keypoints.right_shoulder.confidence < 0.5 || keypoints.nose.confidence < 0.5 { return false; }
-        
+        if keypoints.left_shoulder.confidence < 0.5
+            || keypoints.right_shoulder.confidence < 0.5
+            || keypoints.nose.confidence < 0.5
+        {
+            return false;
+        }
+
         let shoulder_height_diff = (keypoints.left_shoulder.y - keypoints.right_shoulder.y).abs();
         let shoulder_width = (keypoints.right_shoulder.x - keypoints.left_shoulder.x).abs();
-        if shoulder_width < 1.0 { return false; }
+        if shoulder_width < 1.0 {
+            return false;
+        }
         let avg_shoulder_y = (keypoints.left_shoulder.y + keypoints.right_shoulder.y) / 2.0;
         let face_height_proxy = (avg_shoulder_y - keypoints.nose.y).abs();
-        if face_height_proxy < 1.0 { return false; }
+        if face_height_proxy < 1.0 {
+            return false;
+        }
         let corrected_ratio = shoulder_height_diff / face_height_proxy;
-        
+
         // ✨ 수정: 설정된 감지 강도(thresholds)를 사용
         let (tolerance, min_absolute_threshold) = *self.shoulder_alignment_thresholds.lock();
 
@@ -374,31 +553,61 @@ impl PoseAnalyzer {
     }
 
     // 자세 점수 계산
-    fn calculate_posture_score(&self, turtle_neck_detected: bool, shoulder_misalignment_detected: bool) -> u8 {
+    fn calculate_posture_score(
+        &self,
+        turtle_neck_detected: bool,
+        shoulder_misalignment_detected: bool,
+    ) -> u8 {
         let mut score = 100u8;
-        if turtle_neck_detected { score = score.saturating_sub(30); }
-        if shoulder_misalignment_detected { score = score.saturating_sub(20); }
+        if turtle_neck_detected {
+            score = score.saturating_sub(30);
+        }
+        if shoulder_misalignment_detected {
+            score = score.saturating_sub(20);
+        }
         score
     }
 
     // 얼굴-어깨 비율 계산 (거북목 감지용)
     fn calculate_face_shoulder_ratio(&self, keypoints: &PoseKeypoints) -> Option<f32> {
-        if keypoints.left_eye.confidence < 0.5 || keypoints.right_eye.confidence < 0.5 || keypoints.left_shoulder.confidence < 0.5 || keypoints.right_shoulder.confidence < 0.5 { return None; }
+        if keypoints.left_eye.confidence < 0.5
+            || keypoints.right_eye.confidence < 0.5
+            || keypoints.left_shoulder.confidence < 0.5
+            || keypoints.right_shoulder.confidence < 0.5
+        {
+            return None;
+        }
         let face_width = (keypoints.right_eye.x - keypoints.left_eye.x).abs();
         let shoulder_width = (keypoints.right_shoulder.x - keypoints.left_shoulder.x).abs();
-        if shoulder_width > 1.0 { Some(face_width / shoulder_width) } else { None }
+        if shoulder_width > 1.0 {
+            Some(face_width / shoulder_width)
+        } else {
+            None
+        }
     }
 
     // 기준 자세 설정 (캘리브레이션)
-    pub fn set_baseline_posture(&self, base64_data: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub fn set_baseline_posture(
+        &self,
+        base64_data: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let image_data = self.decode_base64_image(base64_data)?;
         let keypoints = self.extract_pose_keypoints(&image_data)?;
 
-        if let Some(ratio) = self.calculate_face_shoulder_ratio(&keypoints) { *self.baseline_face_shoulder_ratio.lock() = Some(ratio); }
-        if let Some(shoulder_alignment) = self.calculate_shoulder_alignment_ratio(&keypoints) { *self.baseline_shoulder_alignment.lock() = Some(shoulder_alignment); }
-        if let Some(forward_ratio) = self.calculate_head_forward_ratio(&keypoints) { *self.baseline_head_forward_ratio.lock() = Some(forward_ratio); }
+        if let Some(ratio) = self.calculate_face_shoulder_ratio(&keypoints) {
+            *self.baseline_face_shoulder_ratio.lock() = Some(ratio);
+        }
+        if let Some(shoulder_alignment) = self.calculate_shoulder_alignment_ratio(&keypoints) {
+            *self.baseline_shoulder_alignment.lock() = Some(shoulder_alignment);
+        }
+        if let Some(forward_ratio) = self.calculate_head_forward_ratio(&keypoints) {
+            *self.baseline_head_forward_ratio.lock() = Some(forward_ratio);
+        }
 
-        if self.baseline_face_shoulder_ratio.lock().is_some() || self.baseline_shoulder_alignment.lock().is_some() || self.baseline_head_forward_ratio.lock().is_some() {
+        if self.baseline_face_shoulder_ratio.lock().is_some()
+            || self.baseline_shoulder_alignment.lock().is_some()
+            || self.baseline_head_forward_ratio.lock().is_some()
+        {
             Ok(())
         } else {
             Err("기준 자세를 설정하기 위한 키포인트를 감지하지 못했습니다.".into())
@@ -407,35 +616,64 @@ impl PoseAnalyzer {
 
     // 어깨 정렬 비율 계산 (어깨 비대칭 감지용)
     fn calculate_shoulder_alignment_ratio(&self, keypoints: &PoseKeypoints) -> Option<f32> {
-        if keypoints.left_shoulder.confidence < 0.5 || keypoints.right_shoulder.confidence < 0.5 || keypoints.nose.confidence < 0.5 { return None; }
+        if keypoints.left_shoulder.confidence < 0.5
+            || keypoints.right_shoulder.confidence < 0.5
+            || keypoints.nose.confidence < 0.5
+        {
+            return None;
+        }
         let shoulder_height_diff = (keypoints.left_shoulder.y - keypoints.right_shoulder.y).abs();
         let avg_shoulder_y = (keypoints.left_shoulder.y + keypoints.right_shoulder.y) / 2.0;
         let face_height_proxy = (avg_shoulder_y - keypoints.nose.y).abs();
-        if face_height_proxy > 1.0 { Some(shoulder_height_diff / face_height_proxy) } else { None }
+        if face_height_proxy > 1.0 {
+            Some(shoulder_height_diff / face_height_proxy)
+        } else {
+            None
+        }
     }
 
     // 머리 전방 비율 계산 (거북목 감지용)
     fn calculate_head_forward_ratio(&self, keypoints: &PoseKeypoints) -> Option<f32> {
-        if keypoints.left_ear.confidence < 0.5 || keypoints.right_ear.confidence < 0.5 || keypoints.left_shoulder.confidence < 0.5 || keypoints.right_shoulder.confidence < 0.5 { return None; }
+        if keypoints.left_ear.confidence < 0.5
+            || keypoints.right_ear.confidence < 0.5
+            || keypoints.left_shoulder.confidence < 0.5
+            || keypoints.right_shoulder.confidence < 0.5
+        {
+            return None;
+        }
         let ear_center_x = (keypoints.left_ear.x + keypoints.right_ear.x) / 2.0;
         let shoulder_center_x = (keypoints.left_shoulder.x + keypoints.right_shoulder.x) / 2.0;
         let shoulder_width = (keypoints.right_shoulder.x - keypoints.left_shoulder.x).abs();
-        if shoulder_width > 1.0 { Some((ear_center_x - shoulder_center_x).abs() / shoulder_width) } else { None } // 절대값으로 변경하여 좌우 방향에 무관하게 전방 기울기만 측정
+        if shoulder_width > 1.0 {
+            Some((ear_center_x - shoulder_center_x).abs() / shoulder_width)
+        } else {
+            None
+        } // 절대값으로 변경하여 좌우 방향에 무관하게 전방 기울기만 측정
     }
 
     // 감지 결과에 따른 추천 메시지 생성
-    fn generate_recommendations(&self, turtle_neck: bool, shoulder_misalignment: bool) -> Vec<String> {
+    fn generate_recommendations(
+        &self,
+        turtle_neck: bool,
+        shoulder_misalignment: bool,
+    ) -> Vec<String> {
+        // 프론트엔드 i18n 처리에 맞춰 '키'를 반환하도록 변경합니다.
+        // 프론트엔드는 수신된 값이 'tip1' 같은 tip 키이면 `dashboard.tips.<key>`로,
+        // 'motivation.excellent' 같은 dotted key이면 `dashboard.<dotted>`로 해석합니다.
         let mut recommendations = Vec::new();
         if turtle_neck {
-            recommendations.push("목을 곧게 펴고 턱을 당기세요".to_string());
-            recommendations.push("모니터 높이를 눈높이에 맞춰주세요".to_string());
+            // dashboard.tips.tip1, dashboard.tips.tip2에 매핑되는 키
+            recommendations.push("tip1".to_string());
+            recommendations.push("tip2".to_string());
         }
         if shoulder_misalignment {
-            recommendations.push("어깨를 수평으로 맞춰주세요".to_string());
-            recommendations.push("등받이에 등을 완전히 기대주세요".to_string());
+            // dashboard.tips.tip4, dashboard.tips.tip5에 매핑되는 키
+            recommendations.push("tip4".to_string());
+            recommendations.push("tip5".to_string());
         }
         if recommendations.is_empty() {
-            recommendations.push("좋은 자세를 유지하고 있습니다!".to_string());
+            // 전체 네임스페이스가 dashboard.motivation.excellent로 존재하므로 dotted key 전송
+            recommendations.push("motivation.excellent".to_string());
         }
         recommendations
     }

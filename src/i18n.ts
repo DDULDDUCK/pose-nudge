@@ -5,6 +5,8 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 // 나중에 생성할 언어 파일들을 import 합니다.
 import translationEN from './locales/en/translation.json';
 import translationKO from './locales/ko/translation.json';
+import translationJA from './locales/ja/translation.json';
+import translationZH from './locales/zh/translation.json';
 
 const resources = {
   en: {
@@ -12,6 +14,12 @@ const resources = {
   },
   ko: {
     translation: translationKO,
+  },
+  ja: {
+    translation: translationJA,
+  },
+  zh: {
+    translation: translationZH,
   },
 };
 
