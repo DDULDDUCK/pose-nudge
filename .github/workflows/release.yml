@@ -70,17 +70,13 @@ jobs:
           security set-keychain-settings -t 7200 -u build.keychain
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain > /dev/null
 
-      # 👇 --- [여기에 코드 추가됨] --- 👇
       - name: Create Apple API Key file for Notarization
         if: runner.os == 'macOS'
-        env:
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
         run: |
           # 시크릿 내용을 AuthKey.p8 파일로 저장
-          echo -n "$APPLE_API_KEY" > AuthKey.p8
+          echo -n "${{ secrets.APPLE_API_KEY }}" > AuthKey.p8
           # 생성된 파일의 전체 경로를 GITHUB_ENV에 등록하여 다음 스텝에서 사용할 수 있게 함
           echo "APPLE_API_KEY_PATH=$(pwd)/AuthKey.p8" >> $GITHUB_ENV
-      # 👆 --- [여기까지 코드 추가됨] --- 👆
 
       - name: Build and Create Release
         uses: tauri-apps/tauri-action@v0.5.23
