@@ -58,12 +58,26 @@ jobs:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
         run: |
+          # 1. 인증서를 파일로 디코딩
           echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+          
+          # 2. 새로운 키체인 생성 (비밀번호는 단순하게 유지해도 괜찮음)
           security create-keychain -p "temp_keychain_password" build.keychain
+          
+          # 3. 새로 만든 키체인을 기본 키체인으로 설정
           security default-keychain -s build.keychain
+          
+          # 4. 키체인 잠금 해제
           security unlock-keychain -p "temp_keychain_password" build.keychain
+          
+          # 5. 인증서 가져오기
           security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "temp_keychain_password" build.keychain
+          
+          # 👇 [수정 1] 키체인이 자동으로 잠기지 않도록 타임아웃을 길게 설정 (예: 2시간)
+          security set-keychain-settings -t 7200 -u build.keychain
+
+          # 👇 [수정 2] codesign이 키체인에 접근할 때 사용자 확인을 요구하지 않도록 설정
+          security set-key-partition-list -S apple-tool:,apple: -s -k "temp_keychain_password" build.keychain > /dev/null
 
       - name: Build and Release
         uses: tauri-apps/tauri-action@v0
