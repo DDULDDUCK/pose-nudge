@@ -125,9 +125,12 @@
     "checkUpdate": "检查更新",
     "checkingUpdate": "正在检查更新...",
     "updateFound": "发现更新: {{version}} ({{date}})",
+    "updateDownloading": "下载中... {{progress}}%",
+    "updateInstalling": "安装中...",
     "updateInstalled": "更新已安装。请重新启动应用。",
     "upToDate": "已是最新版本。",
-    "updateFailed": "更新检查失败"
+    "updateFailed": "更新检查失败",
+    "restartApp": "重新启动应用"
   },
   "webcam": {
     "initModel": "AI模型初始化中...",

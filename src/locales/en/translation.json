@@ -125,9 +125,12 @@
     "checkUpdate": "Check for Updates",
     "checkingUpdate": "Checking for updates...",
     "updateFound": "Update found: {{version}} ({{date}})",
+    "updateDownloading": "Downloading... {{progress}}%",
+    "updateInstalling": "Installing...",
     "updateInstalled": "Update installed. Please restart the app.",
     "upToDate": "You are up to date.",
-    "updateFailed": "Update check failed"
+    "updateFailed": "Update check failed",
+    "restartApp": "Restart App"
   },
   "webcam": {
     "initModel": "Initializing AI model...",

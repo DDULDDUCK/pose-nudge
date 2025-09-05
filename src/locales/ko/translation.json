@@ -125,9 +125,12 @@
     "checkUpdate": "업데이트 확인",
     "checkingUpdate": "업데이트 확인 중...",
     "updateFound": "업데이트 발견: {{version}} ({{date}})",
+    "updateDownloading": "다운로드 중... {{progress}}%",
+    "updateInstalling": "설치 중...",
     "updateInstalled": "업데이트 설치 완료. 앱을 재시작해주세요.",
     "upToDate": "최신 버전입니다.",
-    "updateFailed": "업데이트 확인 실패"
+    "updateFailed": "업데이트 확인 실패",
+    "restartApp": "앱 재시작"
   },
   "webcam": {
     "initModel": "AI 모델 초기화 중...",

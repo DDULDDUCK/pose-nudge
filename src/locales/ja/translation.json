@@ -125,9 +125,12 @@
     "checkUpdate": "アップデート確認",
     "checkingUpdate": "アップデート確認中...",
     "updateFound": "アップデート発見: {{version}} ({{date}})",
+    "updateDownloading": "ダウンロード中... {{progress}}%",
+    "updateInstalling": "インストール中...",
     "updateInstalled": "アップデートインストール完了。アプリを再起動してください。",
     "upToDate": "最新バージョンです。",
-    "updateFailed": "アップデート確認失敗"
+    "updateFailed": "アップデート確認失敗",
+    "restartApp": "アプリ再起動"
   },
   "webcam": {
     "initModel": "AIモデル初期化中...",

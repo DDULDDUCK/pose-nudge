@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
 import { Command, open } from '@tauri-apps/plugin-shell';
 import { platform } from '@tauri-apps/plugin-os';
 import { useTranslation } from 'react-i18next';
@@ -223,7 +224,7 @@ const CameraSettings = () => {
                 <CardTitle>{t('settings.cameraTitle', '카메라 설정')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-800">
+                <div className="p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-800 dark:bg-blue-900 dark:border-blue-600 dark:text-blue-200">
                     <p>{t('settings.cameraGuide', '카메라가 작동하지 않는 경우, 아래 버튼을 클릭하여 시스템 설정에서 앱의 카메라 접근 권한을 허용해주세요.')}</p>
                     <Button onClick={openCameraSettings} className="mt-2">
                         {t('settings.cameraGoTo', '카메라 설정으로 이동')}
@@ -253,16 +254,26 @@ const CameraSettings = () => {
 
 const UpdateSettings = () => {
     const { t } = useTranslation();
-    const [updateStatus, setUpdateStatus] = useState<string>('');
+    const [isChecking, setIsChecking] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
+    const [isInstalling, setIsInstalling] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [updateInfo, setUpdateInfo] = useState<{ version: string; date: string } | null>(null);
+    const [installed, setInstalled] = useState(false);
 
     const checkForUpdates = async () => {
         try {
-            setUpdateStatus(t('settings.checkingUpdate', '업데이트 확인 중...'));
+            setIsChecking(true);
+            setProgress(0);
+            setUpdateInfo(null);
+            setInstalled(false);
+
             const update = await check();
 
             if (update) {
-                setUpdateStatus(t('settings.updateFound', '업데이트 발견: {{version}} ({{date}})', { version: update.version, date: update.date }));
-                console.log(`found update ${update.version} from ${update.date} with notes ${update.body}`);
+                setUpdateInfo({ version: update.version || '', date: update.date || '' });
+                setIsChecking(false);
+                setIsDownloading(true);
 
                 // 업데이트 다운로드 및 설치
                 let downloaded = 0;
@@ -276,21 +287,37 @@ const UpdateSettings = () => {
                             break;
                         case 'Progress':
                             downloaded += event.data.chunkLength;
+                            const currentProgress = contentLength > 0 ? (downloaded / contentLength) * 100 : 0;
+                            setProgress(Math.round(currentProgress));
                             console.log(`downloaded ${downloaded} from ${contentLength}`);
                             break;
                         case 'Finished':
                             console.log('download finished');
+                            setIsDownloading(false);
+                            setIsInstalling(true);
                             break;
                     }
                 });
 
-                setUpdateStatus(t('settings.updateInstalled', '업데이트 설치 완료. 앱을 재시작해주세요.'));
+                setIsInstalling(false);
+                setInstalled(true);
             } else {
-                setUpdateStatus(t('settings.upToDate', '최신 버전입니다.'));
+                setIsChecking(false);
             }
         } catch (error) {
             console.error('업데이트 확인 실패:', error);
-            setUpdateStatus(t('settings.updateFailed', '업데이트 확인 실패'));
+            setIsChecking(false);
+            setIsDownloading(false);
+            setIsInstalling(false);
+        }
+    };
+
+    const handleRestart = async () => {
+        try {
+            await invoke('restart_app');
+        } catch (error) {
+            console.error('앱 재시작 실패:', error);
+            alert('앱을 수동으로 재시작해주세요.');
         }
     };
 
@@ -300,13 +327,48 @@ const UpdateSettings = () => {
                 <CardTitle>{t('settings.updateTitle', '업데이트 설정')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="p-4 bg-green-50 border-l-4 border-green-400 text-green-800">
+                <div className="p-4 bg-green-50 border-l-4 border-green-400 text-green-800 dark:bg-green-900 dark:border-green-600 dark:text-green-200">
                     <p>{t('settings.updateGuide', '새로운 버전이 있는지 확인하고 자동으로 업데이트를 설치합니다.')}</p>
-                    <Button onClick={checkForUpdates} className="mt-2">
-                        {t('settings.checkUpdate', '업데이트 확인')}
+                    <Button
+                        onClick={checkForUpdates}
+                        disabled={isChecking || isDownloading || isInstalling}
+                        className="mt-2"
+                    >
+                        {isChecking ? t('settings.checkingUpdate', '업데이트 확인 중...') : t('settings.checkUpdate', '업데이트 확인')}
                     </Button>
-                    {updateStatus && (
-                        <p className="mt-2 text-sm">{updateStatus}</p>
+
+                    {updateInfo && (
+                        <p className="mt-2 text-sm">
+                            {t('settings.updateFound', '업데이트 발견: {{version}} ({{date}})', { version: updateInfo.version, date: updateInfo.date })}
+                        </p>
+                    )}
+
+                    {isDownloading && (
+                        <div className="mt-4">
+                            <p className="text-sm mb-2">{t('settings.updateDownloading', '다운로드 중... {{progress}}%', { progress })}</p>
+                            <Progress value={progress} className="w-full" />
+                        </div>
+                    )}
+
+                    {isInstalling && (
+                        <p className="mt-2 text-sm">{t('settings.updateInstalling', '설치 중...')}</p>
+                    )}
+
+                    {installed && (
+                        <div className="mt-4">
+                            <p className="text-sm text-green-700 dark:text-green-300 mb-2">
+                                {t('settings.updateInstalled', '업데이트 설치 완료. 앱을 재시작해주세요.')}
+                            </p>
+                            <Button onClick={handleRestart} variant="outline">
+                                {t('settings.restartApp', '앱 재시작')}
+                            </Button>
+                        </div>
+                    )}
+
+                    {!isChecking && !isDownloading && !isInstalling && !installed && !updateInfo && (
+                        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                            {t('settings.upToDate', '최신 버전입니다.')}
+                        </p>
                     )}
                 </div>
             </CardContent>
@@ -368,7 +430,7 @@ const NotificationSettings = () => {
                 <CardTitle>{t('settings.notificationTitle', '시스템 알림 설정')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-800">
+                <div className="p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-800 dark:bg-blue-900 dark:border-blue-600 dark:text-blue-200">
                     <p>{t('settings.notificationGuide', '알림이 오지 않는 경우, 아래 버튼을 클릭하여 시스템 설정에서 앱의 알림 권한을 허용해주세요.')}</p>
                     <Button onClick={openNotificationSettings} className="mt-2">
                         {t('settings.notificationGoTo', '알림 설정으로 이동')}
