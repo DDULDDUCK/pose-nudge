@@ -81,6 +81,25 @@ jobs:
           echo "APPLE_API_KEY_PATH=$(pwd)/AuthKey.p8" >> $GITHUB_ENV
       # 👆 --- [여기까지 코드 추가됨] --- 👆
 
+      - name: Debug Apple Notarization Variables
+        if: runner.os == 'macOS'
+        run: |
+          echo "APPLE_ID: ${{ env.APPLE_ID }}"
+          echo "APPLE_API_KEY_ID: ${{ env.APPLE_API_KEY_ID }}"
+          echo "APPLE_API_ISSUER: ${{ env.APPLE_API_ISSUER }}"
+          echo "APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}"
+          
+          # APPLE_API_KEY_ID의 길이를 확인합니다.
+          KEY_ID_LENGTH=$(echo -n "${{ env.APPLE_API_KEY_ID }}" | wc -c)
+          echo "Length of APPLE_API_KEY_ID is: $KEY_ID_LENGTH"
+          
+          # 파일이 제대로 생성되었는지 확인합니다.
+          if [ -f "${{ env.APPLE_API_KEY_PATH }}" ]; then
+            echo "API Key file found at path."
+          else
+            echo "API Key file NOT found at path."
+          fi
+
       - name: Build and Create Release
         uses: tauri-apps/tauri-action@v0
         id: tauri_build # 스텝 ID 부여
