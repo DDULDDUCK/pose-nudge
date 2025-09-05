@@ -492,7 +492,9 @@ pub fn run() {
             let start_monitoring_item = MenuItem::with_id(app, "start_monitoring", "Start Monitoring", true, None::<&str>)?;
             let stop_monitoring_item = MenuItem::with_id(app, "stop_monitoring", "Stop Monitoring", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&start_monitoring_item, &stop_monitoring_item, &PredefinedMenuItem::separator(app)?, &show, &quit])?;
-
+            
+            #[cfg(target_os = "macos")]
+			app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             // 데스크탑에서 autostart(자동 시작) 등록 시도
             #[cfg(desktop)]
             {

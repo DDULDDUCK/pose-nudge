@@ -10,7 +10,6 @@ import { Progress } from '@/components/ui/progress';
 import { Activity, Bell, Clock, Target, AlertCircle, CheckCircle, RefreshCw, Sparkles, LineChart } from 'lucide-react';
 import { ResponsiveContainer, LineChart as RechartsLineChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line } from 'recharts';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from 'next-themes';
 // 컴포넌트 내부에서 사용할 타입 정의
 interface DashboardStats {
   total_sessions: number;
@@ -42,7 +41,6 @@ const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string |
 
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
-  const { theme } = useTheme();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [chartData, setChartData] = useState<DailyScore[]>([]);
   const recommendations = [
