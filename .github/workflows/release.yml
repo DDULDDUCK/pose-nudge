@@ -16,13 +16,13 @@ jobs:
       matrix:
         include:
           - platform: 'macos-latest'
-            args: '--target aarch64-apple-darwin' # Apple Silicon Mac
+            args: '--target aarch64-apple-darwin --verbose' # Apple Silicon Mac
           - platform: 'macos-latest'
-            args: '--target x86_64-apple-darwin' # Intel Mac
+            args: '--target x86_64-apple-darwin --verbose' # Intel Mac
           - platform: 'ubuntu-22.04'
-            args: '' # Linux
+            args: '--verbose' # Linux
           - platform: 'windows-latest'
-            args: '' # Windows
+            args: '--verbose' # Windows
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -90,6 +90,7 @@ jobs:
           # macOS 코드 서명 및 공증용
           APPLE_SIGNING_IDENTITY: "Developer ID Application: jaeseok song (A38V4K2DHS)"
           APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_API_KEY : "" # --- IGNORE ---
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           # 이전 스텝의 outputs에서 파일 경로를 직접 참조합니다.
