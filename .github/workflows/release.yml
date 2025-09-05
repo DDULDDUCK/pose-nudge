@@ -25,25 +25,10 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
 
-    # 👇 --- [수정된 부분 1] 잡 레벨에서 환경 변수 선언 --- 👇
-    env:
-      # macOS 서명 및 공증용 시크릿들을 여기서 한번에 불러옵니다.
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-      # Windows 서명용
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-      # macOS 인증서
-      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-      MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ... (Node.js, Rust 설치 등 이전 스텝들은 동일) ...
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -54,7 +39,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-      
+
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
@@ -65,9 +50,11 @@ jobs:
 
       - name: Install Apple Certificate and Keychain
         if: runner.os == 'macOS'
-        # 잡 레벨에서 env를 선언했으므로 여기서 다시 선언할 필요가 없습니다.
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
         run: |
-          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+          echo "$MACOS_CERTIFICATE" | base64 --decode > certificate.p12
           security create-keychain -p "temp_keychain_password" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "temp_keychain_password" build.keychain
@@ -77,40 +64,30 @@ jobs:
 
       - name: Create Apple API Key file for Notarization
         if: runner.os == 'macOS'
+        # 이 스텝에서만 secrets.APPLE_API_KEY를 사용하고 다른 곳에는 노출시키지 않습니다.
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
         run: |
-          echo -n "$APPLE_API_KEY" > AuthKey.p8
+          echo -n "$APPLE_API_KEY_CONTENT" > AuthKey.p8
           echo "APPLE_API_KEY_PATH=$(pwd)/AuthKey.p8" >> $GITHUB_ENV
 
-      # 👇 --- [수정된 부분 2] 디버깅 스텝 개선 --- 👇
-      - name: Debug Apple Notarization Variables
-        if: runner.os == 'macOS'
-        run: |
-          echo "--- Verifying values passed to workflow ---"
-          # 이제 잡 레벨 env를 직접 참조하므로 값이 제대로 보여야 합니다.
-          echo "APPLE_ID: $APPLE_ID"
-          echo "APPLE_API_KEY_ID: $APPLE_API_KEY_ID"
-          echo "APPLE_API_ISSUER: $APPLE_API_ISSUER"
-          echo "APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}"
-          
-          KEY_ID_LENGTH=$(echo -n "$APPLE_API_KEY_ID" | wc -c)
-          echo "Length of APPLE_API_KEY_ID is: $KEY_ID_LENGTH"
-          
-          if [ -f "${{ env.APPLE_API_KEY_PATH }}" ]; then
-            echo "API Key file check: OK"
-          else
-            echo "API Key file check: FAILED"
-          fi
-          echo "-------------------------------------------"
-          
-      # 👇 --- [수정된 부분 3] Build 스텝의 env 블록 간소화 --- 👇
       - name: Build and Create Release
         uses: tauri-apps/tauri-action@v0
         id: tauri_build
         env:
-          # 필요한 변수들은 이미 잡 레벨에서 선언되었습니다.
-          # GITHUB_TOKEN과 APPLE_API_KEY_PATH만 여기서 추가로 정의합니다.
+          # GITHUB_TOKEN은 tauri-action에 필수입니다.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+          # Windows 서명용 변수들은 Windows 빌드에서만 사용됩니다.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+
+          # macOS 서명 및 공증을 위해 Tauri CLI가 자동으로 읽어갈 환경 변수들입니다.
+          # 중요한 점: APPLE_API_KEY 변수는 여기에 절대 포함시키지 않습니다.
           APPLE_SIGNING_IDENTITY: "Developer ID Application: jaeseok song (A38V4K2DHS)"
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
         with:
           tagName: ${{ github.ref_name }}
@@ -121,7 +98,6 @@ jobs:
           args: ${{ matrix.args }}
 
       - name: Upload Release Assets as Artifacts
-        # ... (이후 부분은 동일) ...
         uses: actions/upload-artifact@v4
         with:
           name: release-assets-${{ runner.os }}-${{ matrix.arch || 'default' }}
@@ -130,7 +106,6 @@ jobs:
             ${{ steps.tauri_build.outputs.releasePath }}.*.*
 
   publish-updater-json:
-    # ... (이 잡은 변경할 필요 없습니다) ...
     if: startsWith(github.ref, 'refs/tags/')
     needs: publish-tauri
     runs-on: ubuntu-latest
@@ -144,6 +119,7 @@ jobs:
         with:
           path: artifacts/
       - name: Generate updater JSON
+        # ... (이 스크립트는 이전과 동일) ...
         id: generate_json
         run: |
           set -e
