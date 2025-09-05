@@ -58,8 +58,8 @@ jobs:
       - name: Install Apple Certificate and Keychain
         if: runner.os == 'macOS'
         env:
-          APPLE_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: temp_keychain_password
         run: |
           echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
