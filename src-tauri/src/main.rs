@@ -318,6 +318,27 @@ async fn set_current_language(state: State<'_, AppState>, lang: String) -> Resul
     Ok(())
 }
 
+#[tauri::command]
+async fn restart_app(app: tauri::AppHandle) -> Result<(), String> {
+    info!("앱 재시작 요청");
+    // 현재 실행 파일 경로 가져오기
+    if let Ok(exe_path) = std::env::current_exe() {
+        let exe_dir = exe_path.parent().unwrap_or(&exe_path);
+        let exe_name = exe_path.file_name().unwrap_or_default().to_string_lossy();
+
+        // 새 프로세스로 앱 재시작
+        let _ = std::process::Command::new(&exe_path)
+            .current_dir(exe_dir)
+            .spawn();
+
+        // 현재 앱 종료
+        app.exit(0);
+    } else {
+        return Err("실행 파일 경로를 찾을 수 없습니다.".to_string());
+    }
+    Ok(())
+}
+
 // --- Background Tasks ---
 
 async fn background_alert_task(app_handle: AppHandle, state: AppState) {
@@ -638,7 +659,8 @@ pub fn run() {
             get_available_cameras,
             set_selected_camera,
             set_monitoring_interval,
-            set_current_language
+            set_current_language,
+            restart_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
