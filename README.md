@@ -1,105 +1,101 @@
-# Pose Nudge - AI 기반 자세 교정 도우미
+> [!WARNING]
+<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
+[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+<!-- ALL-CONTRIBUTORS-BADGE:END -->
+> ### ⚠️ Important Notice for macOS Users Regarding Updates ⚠️
+>
+> To enhance the security of Pose Nudge, we have updated our official code signature. As a result, **the auto-updater will fail for all previous versions.**
+>
+> **You must manually download and install v2.0.2 or later versions to receive this update.**
+>
+> We apologize for this one-time inconvenience. All future updates will be delivered automatically as expected.
+>
+> **[➡️ Download the Latest Version Here](https://github.com/your-username/pose-nudge/releases/latest)**
 
-Pose Nudge는 웹캠을 활용하여 실시간으로 자세를 분석하고, 거북목과 같이 자세가 흐트러졌을 때 알림을 보내 바른 자세를 유도하는 Tauri 기반의 데스크톱 애플리케이션입니다.
+---
 
-## 🚀 주요 기능
+# Pose Nudge
+<p align="center">
+  <!-- 프로젝트 로고를 여기에 추가할 수 있습니다. -->
+  <img src="public/logo.png" alt="Pose Nudge Logo" width="150">
+  <br>
+  <strong>AI 기반 자세 교정 도우미 - 실시간 자세 분석 및 개선 가이드</strong>
+</p>
 
-- **실시간 자세 분석**: 웹캠을 통한 실시간 자세 모니터링
-- **거북목 감지**: AI 기반 거북목 및 어깨 정렬 상태 분석
-- **스마트 알림**: 자세 문제 감지 시 브라우저 알림 제공
-- **자세 점수**: 실시간 자세 점수 및 개선 권장사항 제공
-- **통계 대시보드**: 자세 개선 진행상황 및 통계 확인
-- **개인화 설정**: 알림 간격, 민감도 등 사용자 맞춤 설정
+<p align="center">
+  <!-- 소셜 및 커뮤니티 배지 -->
+  <a href="https://github.com/your-username/pose-nudge/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/your-username/pose-nudge?style=for-the-badge&logo=github&color=gold"></a>
+  <a href="https://github.com/your-username/pose-nudge/network/members"><img alt="GitHub Forks" src="https://img.shields.io/github/forks/your-username/pose-nudge?style=for-the-badge&logo=github&color=blueviolet"></a>
+  <a href="https://github.com/your-username/pose-nudge/graphs/contributors"><img alt="All Contributors" src="https://img.shields.io/github/all-contributors/your-username/pose-nudge?style=for-the-badge&color=orange"></a>
+  <br>
+  <!-- 상태 및 릴리즈 배지 -->
+  <a href="https://github.com/your-username/pose-nudge/releases"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/your-username/pose-nudge?style=for-the-badge&color=brightgreen"></a>
+  <a href="https://github.com/your-username/pose-nudge/releases"><img alt="GitHub Downloads" src="https://img.shields.io/github/downloads/your-username/pose-nudge/total?style=for-the-badge&logo=github&color=success"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/your-username/pose-nudge?style=for-the-badge&color=informational"></a>
+  <br>
+  <!-- 개발 활동 배지 -->
+  <a href="https://github.com/your-username/pose-nudge/actions/workflows/release.yml"><img alt="Build Status" src="https://img.shields.io/github/actions/workflow/status/your-username/pose-nudge/release.yml?branch=main&style=for-the-badge&logo=githubactions"></a>
+  <a href="https://github.com/your-username/pose-nudge/issues"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/your-username/pose-nudge?style=for-the-badge&logo=github&color=red"></a>
+  <a href="https://github.com/your-username/pose-nudge/pulls"><img alt="GitHub Pull Requests" src="https://img.shields.io/github/issues-pr/your-username/pose-nudge?style=for-the-badge&logo=github&color=yellow"></a>
+</p>
 
-## 🛠️ 기술 스택
+<p align="center">
+  <a href="./README.md"><img alt="Language-English" src="https://img.shields.io/badge/Language-English-blue?style=for-the-badge"></a>
+  <a href="./README.ko.md"><img alt="Language-Korean" src="https://img.shields.io/badge/언어-한국어-blue?style=for-the-badge"></a>
+</p>
 
-### Frontend
-- **React 19** - 사용자 인터페이스
-- **TypeScript** - 타입 안전성
-- **Tailwind CSS 4** - 스타일링
-- **shadcn/ui** - UI 컴포넌트 라이브러리
-- **React Webcam** - 웹캠 접근
+---
 
-### Backend
-- **Rust** - 고성능 백엔드 로직
-- **Tauri 2** - 크로스 플랫폼 데스크톱 프레임워크
-- **이미지 처리** - Base64 이미지 디코딩 및 분석
+## ✨ Key Features
 
-### 개발 도구
-- **Vite** - 빠른 개발 서버
-- **npm** - 패키지 관리
+Pose Nudge는 웹캠을 활용하여 실시간으로 자세를 분석하고, 거북목과 같이 자세가 흐트러졌을 때 알림을 보내 바른 자세를 유도하는 강력한 데스크톱 애플리케이션입니다.
 
-## 📋 시스템 요구사항
+*   **📹 실시간 자세 분석**: 웹캠을 통한 실시간 자세 모니터링 및 AI 기반 분석
+*   **🦴 거북목 감지**: 목과 어깨 선의 각도를 계산하여 거북목 상태 감지
+*   **🔔 스마트 알림**: 자세 문제 감지 시 브라우저 알림 및 개선 권장사항 제공
+*   **📊 자세 점수**: 0-100점으로 현재 자세 상태를 점수화하여 표시
+*   **📈 통계 대시보드**: 자세 개선 진행상황 및 세션 기록 확인
+*   **⚙️ 개인화 설정**: 알림 간격, 민감도, 분석 주기 등 사용자 맞춤 설정
 
-- **운영체제**: Windows 10+, macOS 10.15+, Linux
-- **웹캠**: 내장 또는 외장 웹캠 필요
-- **메모리**: 최소 4GB RAM 권장
-- **Node.js**: 18.x 이상
-- **Rust**: 1.70.0 이상
+---
 
-## 🚀 설치 및 실행
+## 📥 Download
 
-### 1. 저장소 클론
+최신 버전의 Pose Nudge를 운영체제에 맞게 다운로드하세요.
+
+| Operating System | File Format | Download Link |
+| :---: | :---: | :---: |
+| 💻 **Windows** | `.exe` | <a href="https://github.com/your-username/pose-nudge/releases/latest"><img src="https://img.shields.io/badge/Latest_Release-Download-brightgreen?style=flat-square" /></a> |
+| 🍏 **macOS** | `.dmg` | <a href="https://github.com/your-username/pose-nudge/releases/latest"><img src="https://img.shields.io/badge/Latest_Release-Download-brightgreen?style=flat-square" /></a> |
+| 🐧 **Linux** | `.AppImage` | <a href="https://github.com/your-username/pose-nudge/releases/latest"><img src="https://img.shields.io/badge/Latest_Release-Download-brightgreen?style=flat-square" /></a> |
+
+---
+
+## 👨‍💻 For Developers
+
+기여에 관심이 있으시면 이 가이드를 따라 프로젝트를 로컬에서 설정하세요.
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (v18 or higher)
+- [Rust](https://www.rust-lang.org/) (v1.70.0 or higher)
+- [Git](https://git-scm.com/)
+
+### Installation & Run
+
 ```bash
+# 1. Clone the project
 git clone https://github.com/your-username/pose-nudge.git
 cd pose-nudge
-```
 
-### 2. 의존성 설치
-```bash
+# 2. Install Node.js dependencies
 npm install
-```
 
-### 3. 개발 모드 실행
-```bash
+# 3. Run in development mode
 npm run tauri dev
 ```
 
-### 4. 프로덕션 빌드
-```bash
-npm run tauri build
-```
-
-## 📱 사용 방법
-
-### 1. 웹캠 연결
-- 애플리케이션 실행 후 "실시간 모니터링" 탭으로 이동
-- 웹캠 접근 권한 허용
-- 웹캠이 정상적으로 연결되면 화면에 비디오 스트림이 표시됩니다
-
-### 2. 모니터링 시작
-- "실시간 모니터링 활성화" 스위치를 켜기
-- 3초마다 자동으로 자세 분석이 수행됩니다
-- 거북목이나 어깨 정렬 문제가 감지되면 알림이 표시됩니다
-
-### 3. 결과 확인
-- **자세 점수**: 0-100점으로 현재 자세 상태를 점수화
-- **상태 표시**: 거북목, 어깨 정렬 상태를 실시간으로 표시
-- **개선 권장사항**: 자세 개선을 위한 구체적인 조언 제공
-
-### 4. 대시보드 활용
-- **통계 확인**: 일일/주간/월간 자세 개선 진행상황
-- **세션 기록**: 모니터링 세션 시간 및 좋은 자세 유지 시간
-- **알림 이력**: 받은 알림 횟수 및 패턴 분석
-
-## ⚙️ 설정 옵션
-
-### 알림 설정
-- **알림 간격**: 30초 ~ 5분 (기본값: 30초)
-- **휴식 알림**: 30분 ~ 2시간 간격으로 휴식 알림
-
-### 분석 설정
-- **거북목 민감도**: 낮음/보통/높음
-- **어깨 정렬 민감도**: 낮음/보통/높음
-- **분석 주기**: 1초 ~ 10초 (기본값: 3초)
-
-### 카메라 설정
-- **해상도**: 640x480 ~ 1920x1080
-- **프레임 레이트**: 15fps ~ 60fps
-
-## 🔧 개발자 가이드
-
-### 프로젝트 구조
+### Project Structure
 ```
 pose-nudge/
 ├── src/                    # React 프론트엔드
@@ -107,58 +103,84 @@ pose-nudge/
 │   │   ├── ui/            # shadcn/ui 컴포넌트
 │   │   ├── Dashboard.tsx   # 대시보드
 │   │   ├── WebcamCapture.tsx # 웹캠 컴포넌트
-│   │   └── NotificationSystem.tsx # 알림 시스템
+│   │   └── SettingsPage.tsx # 설정 페이지
 │   ├── lib/               # 유틸리티 함수
+│   ├── locales/           # 다국어 지원
 │   └── App.tsx            # 메인 앱 컴포넌트
 ├── src-tauri/             # Rust 백엔드
 │   ├── src/
 │   │   ├── main.rs        # 메인 백엔드 로직
-│   │   └── pose_analysis.rs # 자세 분석 엔진
+│   │   ├── pose_analysis.rs # 자세 분석 엔진
+│   │   └── notifications.rs # 알림 시스템
 │   ├── Cargo.toml         # Rust 의존성
 │   └── tauri.conf.json    # Tauri 설정
-└── public/                # 정적 파일
+├── models/                # AI 모델 파일
+├── public/                # 정적 파일
+└── locales/               # 다국어 파일
 ```
-
-### 자세 분석 알고리즘
-현재 구현된 자세 분석은 다음과 같은 방식으로 작동합니다:
-
-1. **이미지 처리**: Base64로 인코딩된 웹캠 이미지를 디코딩
-2. **키포인트 추출**: 얼굴, 어깨, 목 등의 주요 포인트 감지 (현재는 더미 데이터)
-3. **자세 평가**: 
-   - 거북목: 목과 어깨 선의 각도 계산
-   - 어깨 정렬: 양쪽 어깨 높이 차이 측정
-4. **점수 계산**: 전체적인 자세 점수를 0-100점으로 계산
-
-### 향후 개선 계획
-- [ ] MediaPipe나 YOLO-Pose와 같은 실제 ML 모델 통합
-- [ ] 더 정확한 자세 분석 알고리즘 구현
-- [ ] 사용자별 자세 프로필 학습 기능
-- [ ] 운동 및 스트레칭 가이드 제공
-- [ ] 클라우드 동기화 기능
-
-## 🤝 기여하기
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📄 라이선스
-
-이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 `LICENSE` 파일을 참조하세요.
-
-## 🙏 감사의 말
-
-- [Tauri](https://tauri.app/) - 크로스 플랫폼 앱 프레임워크
-- [shadcn/ui](https://ui.shadcn.com/) - 아름다운 UI 컴포넌트
-- [React Webcam](https://github.com/mozmorris/react-webcam) - 웹캠 액세스
-- [Tailwind CSS](https://tailwindcss.com/) - 유틸리티 우선 CSS 프레임워크
-
-## 📞 지원 및 문의
-
-문제가 발생하거나 질문이 있으시면 [Issues](https://github.com/your-username/pose-nudge/issues)에 등록해 주세요.
 
 ---
 
-**건강한 자세로 더 나은 삶을! 🏃‍♂️💪**
+## 🛠️ Tech Stack
+
+-   **Framework**: Tauri (Rust + React)
+-   **Frontend**: React 19, TypeScript, Tailwind CSS 4
+-   **Backend**: Rust, Tauri 2
+-   **AI/ML**: YOLO-Pose 모델 (향후 통합 예정)
+-   **Build/Deployment**: Tauri CLI
+
+---
+
+## 🤝 Contributing
+
+기여는 언제나 환영합니다! 버그 리포트, 기능 제안, 또는 코드 기여 등 어떤 형태든 환영합니다. 자세한 내용은 [Contributing Guidelines](CONTRIBUTING.md)를 확인하세요.
+
+---
+
+## ✨ Contributors
+
+이 프로젝트를 더 좋게 만들어주신 훌륭한 분들께 감사드립니다! ([emoji key](https://allcontributors.org/docs/en/emoji-key))
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/DDULDDUCK"><img src="https://avatars.githubusercontent.com/u/126528992?v=4?s=100" width="100px;" alt="Jaeseok Song"/><br /><sub><b>Jaeseok Song</b></sub></a><br /><a href="https://github.com/dduldduk/pose-nodge/commits?author=DDULDDUCK" title="Code">💻</a> <a href="#maintenance-DDULDDUCK" title="Maintenance">🚧</a></td>
+    </tr>
+  </tbody>
+  <tfoot>
+    <tr>
+      <td align="center" size="13px" colspan="7">
+        <img src="https://raw.githubusercontent.com/all-contributors/all-contributors-cli/1b8533af435da9854653492b1327a23a4dbd0a10/assets/logo-small.svg">
+          <a href="https://all-contributors.js.org/docs/en/bot/usage">Add your contributions</a>
+        </img>
+      </td>
+    </tr>
+  </tfoot>
+</table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+---
+
+## 📜 License
+
+이 프로젝트는 [AGPLv3 License](LICENSE) 하에 배포됩니다.
+
+## Contributors ✨
+
+Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
