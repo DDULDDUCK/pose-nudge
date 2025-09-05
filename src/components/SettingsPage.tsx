@@ -6,6 +6,7 @@ import { Command, open } from '@tauri-apps/plugin-shell';
 import { platform } from '@tauri-apps/plugin-os';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
+import { check } from '@tauri-apps/plugin-updater';
 
 // --- LocalStorage Keys ---
 const LANGUAGE_KEY = "pose_nudge_language";
@@ -249,6 +250,69 @@ const CameraSettings = () => {
 };
 
 
+const UpdateSettings = () => {
+    const { t } = useTranslation();
+    const [updateStatus, setUpdateStatus] = useState<string>('');
+
+    const checkForUpdates = async () => {
+        try {
+            setUpdateStatus('업데이트 확인 중...');
+            const update = await check();
+
+            if (update) {
+                setUpdateStatus(`업데이트 발견: ${update.version} (${update.date})`);
+                console.log(`found update ${update.version} from ${update.date} with notes ${update.body}`);
+
+                // 업데이트 다운로드 및 설치
+                let downloaded = 0;
+                let contentLength = 0;
+
+                await update.downloadAndInstall((event) => {
+                    switch (event.event) {
+                        case 'Started':
+                            contentLength = event.data.contentLength || 0;
+                            console.log(`started downloading ${event.data.contentLength} bytes`);
+                            break;
+                        case 'Progress':
+                            downloaded += event.data.chunkLength;
+                            console.log(`downloaded ${downloaded} from ${contentLength}`);
+                            break;
+                        case 'Finished':
+                            console.log('download finished');
+                            break;
+                    }
+                });
+
+                setUpdateStatus('업데이트 설치 완료. 앱을 재시작해주세요.');
+            } else {
+                setUpdateStatus('최신 버전입니다.');
+            }
+        } catch (error) {
+            console.error('업데이트 확인 실패:', error);
+            setUpdateStatus('업데이트 확인 실패');
+        }
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>{t('settings.updateTitle', '업데이트 설정')}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="p-4 bg-green-50 border-l-4 border-green-400 text-green-800">
+                    <p>{t('settings.updateGuide', '새로운 버전이 있는지 확인하고 자동으로 업데이트를 설치합니다.')}</p>
+                    <Button onClick={checkForUpdates} className="mt-2">
+                        {t('settings.checkUpdate', '업데이트 확인')}
+                    </Button>
+                    {updateStatus && (
+                        <p className="mt-2 text-sm">{updateStatus}</p>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
 const NotificationSettings = () => {
     const { t } = useTranslation();
 
@@ -292,6 +356,7 @@ const SettingsPage = () => {
             <DetectionSettings />
             <CameraSettings />
             <NotificationSettings />
+            <UpdateSettings />
         </div>
     );
 };

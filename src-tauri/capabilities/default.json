@@ -13,6 +13,7 @@
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",
+    "updater:default",
     {
       "identifier": "shell:allow-execute",
       "allow": [

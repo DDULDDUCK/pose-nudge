@@ -43,12 +43,19 @@
     "resources": [
       "../models",
       "../locales"
-    ]
+    ],
+    "createUpdaterArtifacts": true
   },
   "plugins": {
     "fs": {},
     "sql": {
       "preload": ["sqlite:posture_data.db"]
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFGMDlDMDJDODcxRDgyOEIKUldTTGdoMkhMTUFKci9Hc296TXJvdSt0Mlp6WFlMYVV1M0hCaXVRVm5ublpIYUxLeEd1R3M0cVEK",
+      "endpoints": [
+        "https://github.com/dduldduck/pose-nudge/releases/latest/download/latest.json"
+      ]
     }
   }
 }

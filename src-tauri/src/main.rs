@@ -6,7 +6,6 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use log::{error, info, warn, LevelFilter};
 use serde_json::Value;
-use tauri_plugin_notification::{Notification, NotificationExt};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
@@ -22,6 +21,7 @@ use tauri::{
     Runtime,
     State, // ✨ 제네릭을 위해 Runtime 트레이트 import
 };
+use tauri_plugin_notification::{Notification, NotificationExt};
 use tokio::time::sleep;
 
 use image::{ImageBuffer, Rgb};
@@ -335,9 +335,11 @@ async fn background_alert_task(app_handle: AppHandle, state: AppState) {
         };
 
         if let Some(message) = messages_to_send {
-            if message.is_empty() { continue; }
+            if message.is_empty() {
+                continue;
+            }
 
-            info!("시스템 알림 발생: {}", &message);        
+            info!("시스템 알림 발생: {}", &message);
 
             // ✨ 이것이 Tauri v2의 표준적인 알림 호출 방식입니다.
             let builder = app_handle.notification().builder();
@@ -444,7 +446,6 @@ async fn background_monitoring_task(app_handle: AppHandle, state: AppState) {
                                     let message = translations.get(&lang, message_key);
                                     info!("번역 결과: '{}'", message);
 
-
                                     state.alert_messages.lock().unwrap().push(message);
                                     *last_alert = Instant::now();
                                 }
@@ -466,6 +467,7 @@ fn main() {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_shell::init()) 
         .plugin(tauri_plugin_os::init())
