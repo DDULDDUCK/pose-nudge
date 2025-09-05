@@ -3,7 +3,7 @@
   <!-- 프로젝트 로고를 여기에 추가할 수 있습니다. -->
   <img src="public/logo.png" alt="Pose Nudge Logo" width="150">
   <br>
-  <strong>AI-Powered Posture Correction Assistant - Real-time Posture Analysis and Improvement Guide</strong>
+  <strong>AI 기반 자세 교정 도우미 - 실시간 자세 분석 및 개선 가이드</strong>
 </p>
 
 <p align="center">
@@ -32,20 +32,20 @@
 
 ## ✨ Key Features
 
-Pose Nudge is a powerful desktop application that uses your webcam to analyze posture in real-time and sends notifications when posture issues like forward head posture are detected, helping you maintain proper posture.
+Pose Nudge는 웹캠을 활용하여 실시간으로 자세를 분석하고, 거북목과 같이 자세가 흐트러졌을 때 알림을 보내 바른 자세를 유도하는 강력한 데스크톱 애플리케이션입니다.
 
-*   **📹 Real-time Posture Analysis**: Webcam-based real-time posture monitoring and AI-powered analysis
-*   **🦴 Forward Head Posture Detection**: Calculates neck and shoulder line angles to detect forward head posture
-*   **🔔 Smart Notifications**: Browser notifications and improvement recommendations when posture issues are detected
-*   **📊 Posture Score**: Displays current posture status scored from 0-100 points
-*   **📈 Statistics Dashboard**: View posture improvement progress and session records
-*   **⚙️ Personalized Settings**: Customizable notification intervals, sensitivity, and analysis frequency
+*   **📹 실시간 자세 분석**: 웹캠을 통한 실시간 자세 모니터링 및 AI 기반 분석
+*   **🦴 거북목 감지**: 목과 어깨 선의 각도를 계산하여 거북목 상태 감지
+*   **🔔 스마트 알림**: 자세 문제 감지 시 브라우저 알림 및 개선 권장사항 제공
+*   **📊 자세 점수**: 0-100점으로 현재 자세 상태를 점수화하여 표시
+*   **📈 통계 대시보드**: 자세 개선 진행상황 및 세션 기록 확인
+*   **⚙️ 개인화 설정**: 알림 간격, 민감도, 분석 주기 등 사용자 맞춤 설정
 
 ---
 
 ## 📥 Download
 
-Download the latest version of Pose Nudge for your operating system.
+최신 버전의 Pose Nudge를 운영체제에 맞게 다운로드하세요.
 
 | Operating System | File Format | Download Link |
 | :---: | :---: | :---: |
@@ -57,7 +57,7 @@ Download the latest version of Pose Nudge for your operating system.
 
 ## 👨‍💻 For Developers
 
-If you're interested in contributing, follow this guide to set up the project locally.
+기여에 관심이 있으시면 이 가이드를 따라 프로젝트를 로컬에서 설정하세요.
 
 ### Prerequisites
 
@@ -82,25 +82,25 @@ npm run tauri dev
 ### Project Structure
 ```
 pose-nudge/
-├── src/                    # React Frontend
-│   ├── components/         # UI Components
-│   │   ├── ui/            # shadcn/ui Components
-│   │   ├── Dashboard.tsx   # Dashboard
-│   │   ├── WebcamCapture.tsx # Webcam Component
-│   │   └── SettingsPage.tsx # Settings Page
-│   ├── lib/               # Utility Functions
-│   ├── locales/           # Internationalization Support
-│   └── App.tsx            # Main App Component
-├── src-tauri/             # Rust Backend
+├── src/                    # React 프론트엔드
+│   ├── components/         # UI 컴포넌트
+│   │   ├── ui/            # shadcn/ui 컴포넌트
+│   │   ├── Dashboard.tsx   # 대시보드
+│   │   ├── WebcamCapture.tsx # 웹캠 컴포넌트
+│   │   └── SettingsPage.tsx # 설정 페이지
+│   ├── lib/               # 유틸리티 함수
+│   ├── locales/           # 다국어 지원
+│   └── App.tsx            # 메인 앱 컴포넌트
+├── src-tauri/             # Rust 백엔드
 │   ├── src/
-│   │   ├── main.rs        # Main Backend Logic
-│   │   ├── pose_analysis.rs # Posture Analysis Engine
-│   │   └── notifications.rs # Notification System
-│   ├── Cargo.toml         # Rust Dependencies
-│   └── tauri.conf.json    # Tauri Configuration
-├── models/                # AI Model Files
-├── public/                # Static Files
-└── locales/               # Localization Files
+│   │   ├── main.rs        # 메인 백엔드 로직
+│   │   ├── pose_analysis.rs # 자세 분석 엔진
+│   │   └── notifications.rs # 알림 시스템
+│   ├── Cargo.toml         # Rust 의존성
+│   └── tauri.conf.json    # Tauri 설정
+├── models/                # AI 모델 파일
+├── public/                # 정적 파일
+└── locales/               # 다국어 파일
 ```
 
 ---
@@ -110,20 +110,20 @@ pose-nudge/
 -   **Framework**: Tauri (Rust + React)
 -   **Frontend**: React 19, TypeScript, Tailwind CSS 4
 -   **Backend**: Rust, Tauri 2
--   **AI/ML**: YOLO-Pose Model (planned for future integration)
+-   **AI/ML**: YOLO-Pose 모델 (향후 통합 예정)
 -   **Build/Deployment**: Tauri CLI
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are always welcome! Whether it's bug reports, feature suggestions, or code contributions, we welcome all forms of participation. Please check out our [Contributing Guidelines](CONTRIBUTING.md) for more details.
+기여는 언제나 환영합니다! 버그 리포트, 기능 제안, 또는 코드 기여 등 어떤 형태든 환영합니다. 자세한 내용은 [Contributing Guidelines](CONTRIBUTING.md)를 확인하세요.
 
 ---
 
 ## ✨ Contributors
 
-Thanks to these wonderful people who have made this project better! ([emoji key](https://allcontributors.org/docs/en/emoji-key))
+이 프로젝트를 더 좋게 만들어주신 훌륭한 분들께 감사드립니다! ([emoji key](https://allcontributors.org/docs/en/emoji-key))
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore-start -->
@@ -154,7 +154,7 @@ Thanks to these wonderful people who have made this project better! ([emoji key]
 
 ## 📜 License
 
-This project is licensed under the [AGPLv3 License](LICENSE).
+이 프로젝트는 [AGPLv3 License](LICENSE) 하에 배포됩니다.
 
 ## Contributors ✨
 
