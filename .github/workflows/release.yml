@@ -97,7 +97,6 @@ jobs:
 
       - name: Build and Create Release
         uses: tauri-apps/tauri-action@v0.5.23
-        args: --verbose
         id: tauri_build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -118,7 +117,7 @@ jobs:
           releaseBody: '자세한 릴리즈 노트는 CHANGELOG.md 파일을 참고해주세요.'
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} --verbose
 
       - name: Upload Release Assets as Artifacts
         uses: actions/upload-artifact@v4
