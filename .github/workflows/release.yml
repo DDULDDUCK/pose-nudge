@@ -1,24 +1,22 @@
 name: 'Publish with Code Signing'
 
 on:
-  workflow_dispatch: # 수동 실행을 위해
+  workflow_dispatch:
   push:
-    branches:
-      - release
     tags:
-      - 'v*' # v로 시작하는 태그가 푸시될 때 실행
+      - 'v*'
 
 jobs:
   publish-tauri:
     permissions:
-      contents: write # 릴리즈를 생성하고 에셋을 업로드하기 위해 필수
+      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest' # Apple Silicon (arm64)
+          - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
-          - platform: 'macos-latest' # Intel (x86_64)
+          - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
             args: ''
@@ -44,7 +42,6 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          # macOS에서는 두 아키텍처 타겟을 모두 설치하여 크로스 컴파일 지원
           targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
@@ -55,51 +52,34 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # --- [핵심] macOS 코드 사이닝을 위한 키체인 설정 ---
       - name: Install Apple Certificate and Keychain
         if: runner.os == 'macOS'
         env:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
         run: |
-          # Base64로 인코딩된 인증서를 .p12 파일로 디코딩
           echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
-          
-          # CI 환경을 위한 임시 키체인 생성 및 설정
           security create-keychain -p "temp_keychain_password" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "temp_keychain_password" build.keychain
-          
-          # 키체인에 인증서 가져오기 (codesign이 접근할 수 있도록 허용)
           security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
-          
-          # 빌드 중 불필요한 UI 프롬프트 방지
           security set-key-partition-list -S apple-tool:,apple: -s -k "temp_keychain_password" build.keychain
 
       - name: Build and Release
-        # tauri-action은 아래 환경 변수들을 자동으로 감지하여 코드 사이닝과 공증을 수행합니다.
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-          # 1. Tauri 업데이터 서명용 (앱 내부 업데이트 검증)
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-
-          # 2. Apple 코드 사이닝 및 공증용 (macOS 게이트키퍼 통과)
-          # 'if' 조건 없이 macOS runner에서만 이 변수들이 사용됩니다.
-          APPLE_SIGNING_IDENTITY: "Developer ID Application: jaeseok song (A38V4K2DHS)"
+          APPLE_SIGNING_IDENTITY: "Developer ID Application: jaeseok song (A38V4K2DHS)" # 직접 작성하는 방식 권장
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          # API 키를 사용하므로 APPLE_PASSWORD는 필요 없습니다.
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-
         with:
-          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('app-v{0}', github.run_number) }}
-          releaseName: 'App ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format(''v{0}'', github.run_number) }}'
-          releaseBody: |
-            자세한 릴리즈 노트는 CHANGELOG.md 파일을 참고해주세요.
+          tagName: ${{ github.ref_name }}
+          releaseName: 'App ${{ github.ref_name }}'
+          releaseBody: '자세한 릴리즈 노트는 CHANGELOG.md 파일을 참고해주세요.'
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
@@ -112,62 +92,60 @@ jobs:
     permissions:
       contents: write # 릴리즈 에셋을 업로드하기 위해
     steps:
-      - name: Download release assets metadata
-        id: download_meta
+      - name: Download signature files
         run: |
-          gh release download ${{ github.ref_name }} --pattern '*-updater.json' --output updater-meta.json
-          # 만약 updater-meta.json 파일이 없으면 (최초 릴리즈 등), 빈 JSON 객체로 초기화
-          if [ ! -f updater-meta.json ]; then
-            echo '{}' > updater-meta.json
-          fi
-          
-          # 릴리즈에서 모든 .sig 파일 다운로드
-          gh release download ${{ github.ref_name }} --pattern '*.sig'
+          # 1. 효율적으로 .sig 파일과 .zip 파일(윈도우)만 다운로드
+          gh release download ${{ github.ref_name }} --pattern "*.sig"
+          gh release download ${{ github.ref_name }} --pattern "*.msi.zip"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate updater JSON
         id: generate_json
         run: |
-          # 기존 업데이터 메타데이터 로드
-          UPDATER_JSON=$(cat updater-meta.json)
+          set -e # 오류 발생 시 즉시 중단
 
           # 플랫폼별로 서명 파일 내용 읽기
           SIG_WINDOWS=$(cat *.msi.zip.sig)
           SIG_MAC_INTEL=$(cat *.x64.dmg.sig)
           SIG_MAC_ARM=$(cat *.aarch64.dmg.sig)
-          
-          # jq를 사용하여 기존 JSON에 새 버전 정보 추가 또는 업데이트
-          UPDATER_JSON=$(echo "$UPDATER_JSON" | jq \
+
+          # 다운로드 URL 생성 (파일을 직접 다운로드할 필요 없이 이름만으로 URL 구성)
+          # 'ls' 명령으로 파일명을 찾아 URL을 만듭니다.
+          URL_WINDOWS="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename *.msi.zip)"
+          # macOS .dmg 파일은 다운로드하지 않았지만, .sig 파일 이름에서 유추하여 URL을 만듭니다.
+          URL_MAC_INTEL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename *.x64.dmg.sig .sig)"
+          URL_MAC_ARM="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename *.aarch64.dmg.sig .sig)"
+
+          # jq를 사용하여 새로운 JSON 파일 생성
+          JSON_CONTENT=$(jq -n \
             --arg version "${{ github.ref_name }}" \
             --arg notes "Release notes for ${{ github.ref_name }}" \
             --arg pub_date "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
             --arg sig_windows "$SIG_WINDOWS" \
-            --arg url_windows "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(ls *.msi.zip)" \
+            --arg url_windows "$URL_WINDOWS" \
             --arg sig_mac_intel "$SIG_MAC_INTEL" \
-            --arg url_mac_intel "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(ls *.x64.dmg)" \
+            --arg url_mac_intel "$URL_MAC_INTEL" \
             --arg sig_mac_arm "$SIG_MAC_ARM" \
-            --arg url_mac_arm "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(ls *.aarch64.dmg)" \
-            '
-            .platforms."windows-x86_64" = { signature: $sig_windows, url: $url_windows } |
-            .platforms."darwin-x86_64" = { signature: $sig_mac_intel, url: $url_mac_intel } |
-            .platforms."darwin-aarch64" = { signature: $sig_mac_arm, url: $url_mac_arm } |
-            .version = $version | .notes = $notes | .pub_date = $pub_date
-            ')
-            
-          # 최종 JSON 파일 생성
-          echo "$UPDATER_JSON" | jq '.' > latest.json
+            --arg url_mac_arm "$URL_MAC_ARM" \
+            '{
+              "version": $version,
+              "notes": $notes,
+              "pub_date": $pub_date,
+              "platforms": {
+                "windows-x86_64": { "signature": $sig_windows, "url": $url_windows },
+                "darwin-x86_64": { "signature": $sig_mac_intel, "url": $url_mac_intel },
+                "darwin-aarch64": { "signature": $sig_mac_arm, "url": $url_mac_arm }
+              }
+            }')
+
+          echo "$JSON_CONTENT" > latest.json
           echo "Generated latest.json:"
           cat latest.json
           echo "json_path=latest.json" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Upload updater JSON to release
         run: |
-          # 이전 updater.json 에셋이 있다면 삭제 (덮어쓰기)
-          gh release asset delete ${{ github.ref_name }} updater.json --yes || true
-          # 새 파일 업로드
           gh release upload ${{ github.ref_name }} ${{ steps.generate_json.outputs.json_path }} --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
