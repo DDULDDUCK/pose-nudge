@@ -43,6 +43,25 @@ Pose Nudge is a powerful desktop application that uses your webcam to analyze po
 
 ---
 
+## 🎥 Demo
+
+### Screenshots
+
+<!-- Add screenshots here -->
+<p align="center">
+  <img src="screenshots/dashboard.png" alt="Dashboard Screenshot" width="400">
+  <img src="screenshots/analysis.png" alt="Posture Analysis Screenshot" width="400">
+</p>
+
+### Demo GIF
+
+<!-- Add demo GIF here -->
+<p align="center">
+  <img src="demo/demo.gif" alt="Demo GIF" width="600">
+</p>
+
+---
+
 ## 📥 Download
 
 Download the latest version of Pose Nudge for your operating system.

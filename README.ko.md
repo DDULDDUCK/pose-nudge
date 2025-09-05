@@ -43,6 +43,25 @@ Pose Nudge는 웹캠을 활용하여 실시간으로 자세를 분석하고, 거
 
 ---
 
+## 🎥 데모
+
+### 스크린샷
+
+<!-- 스크린샷을 여기에 추가하세요 -->
+<p align="center">
+  <img src="screenshots/dashboard.png" alt="대시보드 스크린샷" width="400">
+  <img src="screenshots/analysis.png" alt="자세 분석 스크린샷" width="400">
+</p>
+
+### 데모 GIF
+
+<!-- 데모 GIF를 여기에 추가하세요 -->
+<p align="center">
+  <img src="demo/demo.gif" alt="데모 GIF" width="600">
+</p>
+
+---
+
 ## 📥 Download
 
 최신 버전의 Pose Nudge를 운영체제에 맞게 다운로드하세요.
