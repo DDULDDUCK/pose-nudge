@@ -14,6 +14,10 @@
     "sql:allow-load",
     "sql:allow-execute",
     "updater:default",
+{
+      "identifier": "camera:allow-access",
+      "allow": ["*"]
+    },
     {
       "identifier": "shell:allow-execute",
       "allow": [
