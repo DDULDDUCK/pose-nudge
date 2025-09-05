@@ -16,13 +16,13 @@ jobs:
       matrix:
         include:
           - platform: 'macos-latest'
-            args: '--target aarch64-apple-darwin --verbose' # Apple Silicon Mac
+            args: '--target aarch64-apple-darwin' # Apple Silicon Mac
           - platform: 'macos-latest'
-            args: '--target x86_64-apple-darwin --verbose' # Intel Mac
+            args: '--target x86_64-apple-darwin' # Intel Mac
           - platform: 'ubuntu-22.04'
-            args: '--verbose' # Linux
+            args: '' # Linux
           - platform: 'windows-latest'
-            args: '--verbose' # Windows
+            args: '' # Windows
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -78,7 +78,7 @@ jobs:
           echo -n "${{ secrets.APPLE_API_KEY }}" > AuthKey.p8
           # 생성된 파일의 전체 경로를 GITHUB_OUTPUT에 등록
           echo "api_key_path=$(pwd)/AuthKey.p8" >> $GITHUB_OUTPUT
-          
+
       - name: Final Debug Check before Tauri Action
         if: runner.os == 'macOS'
         env:
@@ -97,6 +97,7 @@ jobs:
 
       - name: Build and Create Release
         uses: tauri-apps/tauri-action@v0.5.23
+        args: --verbose
         id: tauri_build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
