@@ -78,6 +78,22 @@ jobs:
           echo -n "${{ secrets.APPLE_API_KEY }}" > AuthKey.p8
           # 생성된 파일의 전체 경로를 GITHUB_OUTPUT에 등록
           echo "api_key_path=$(pwd)/AuthKey.p8" >> $GITHUB_OUTPUT
+          
+      - name: Final Debug Check before Tauri Action
+        if: runner.os == 'macOS'
+        env:
+          # Build and Create Release 스텝과 동일한 env 블록을 사용
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_PATH: ${{ steps.create_api_key.outputs.api_key_path }}
+        run: |
+          echo "--- Verifying environment variables ---"
+          echo "APPLE_API_KEY_ID='${{ env.APPLE_API_KEY_ID }}'"
+          echo "Length of APPLE_API_KEY_ID: ${#APPLE_API_KEY_ID}"
+          echo "-------------------------------------"
+          # 전체 환경 변수 목록에서 APPLE 관련 변수들을 모두 출력
+          env | grep APPLE
 
       - name: Build and Create Release
         uses: tauri-apps/tauri-action@v0.5.23
