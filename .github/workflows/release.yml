@@ -1,5 +1,13 @@
-  publish-tauri:
-    # 빌드 및 릴리즈 생성 잡
+name: 'Publish with Code Signing'
+
+on:
+  workflow_dispatch: # GitHub UI에서 수동으로 실행 가능
+  push:
+    tags:
+      - 'v*' # v로 시작하는 태그가 푸시될 때 자동 실행
+
+jobs: # <-- 이 최상위 'jobs' 층이 반드시 필요합니다.
+  publish-tauri: # <-- 'publish-tauri' 잡은 jobs 아래에 들여쓰기로 포함됩니다.
     permissions:
       contents: write
     strategy:
@@ -60,23 +68,18 @@
           security set-keychain-settings -t 7200 -u build.keychain
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain > /dev/null
 
-
       - name: Build and Create Release
         uses: tauri-apps/tauri-action@v0.5.23
         id: tauri_build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Windows 업데이트 서명용
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-
-          # [변경] macOS 코드 서명 및 공증용 환경 변수를 앱-특정 비밀번호 방식으로 변경합니다.
+          # 앱-특정 비밀번호 방식으로 변경된 부분
           APPLE_SIGNING_IDENTITY: "Developer ID Application: jaeseok song (A38V4K2DHS)"
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }} # [추가] 앱-특정 비밀번호
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}   # [추가] Apple 개발자 팀 ID
-          
-
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'App ${{ github.ref_name }}'
@@ -84,3 +87,65 @@
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+  publish-updater-json: # <-- 두 번째 잡인 'publish-updater-json'도 jobs 아래에 있어야 합니다.
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: publish-tauri
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all release assets from artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Generate updater JSON
+        id: generate_json
+        run: |
+          set -e
+
+          echo "Searching for files in artifacts directory..."
+          ls -R artifacts
+
+          SIG_WINDOWS=$(cat $(find artifacts -name '*.msi.zip.sig'))
+          SIG_MAC_INTEL=$(cat $(find artifacts -name '*.x64.dmg.sig'))
+          SIG_MAC_ARM=$(cat $(find artifacts -name '*.aarch64.dmg.sig'))
+
+          URL_WINDOWS="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename $(find artifacts -name '*.msi.zip'))"
+          URL_MAC_INTEL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename $(find artifacts -name '*.x64.dmg'))"
+          URL_MAC_ARM="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename $(find artifacts -name '*.aarch64.dmg'))"
+
+          JSON_CONTENT=$(jq -n \
+            --arg version "${{ github.ref_name }}" \
+            --arg notes "Release notes for ${{ github.ref_name }}" \
+            --arg pub_date "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --arg sig_windows "$SIG_WINDOWS" \
+            --arg url_windows "$URL_WINDOWS" \
+            --arg sig_mac_intel "$SIG_MAC_INTEL" \
+            --arg url_mac_intel "$URL_MAC_INTEL" \
+            --arg sig_mac_arm "$SIG_MAC_ARM" \
+            --arg url_mac_arm "$URL_MAC_ARM" \
+            '{
+              "version": $version,
+              "notes": $notes,
+              "pub_date": $pub_date,
+              "platforms": {
+                "windows-x86_64": { "signature": $sig_windows, "url": $url_windows },
+                "darwin-x86_64": { "signature": $sig_mac_intel, "url": $url_mac_intel },
+                "darwin-aarch64": { "signature": $sig_mac_arm, "url": $url_mac_arm }
+              }
+            }')
+
+          echo "$JSON_CONTENT" > latest.json
+          echo "Generated latest.json:"
+          cat latest.json
+          echo "json_path=latest.json" >> $GITHUB_OUTPUT
+
+      - name: Upload updater JSON to release
+        run: gh release upload ${{ github.ref_name }} ${{ steps.generate_json.outputs.json_path }} --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
