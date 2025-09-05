@@ -26,6 +26,7 @@
 <p align="center">
   <a href="./README.md"><img alt="Language-English" src="https://img.shields.io/badge/Language-English-blue?style=for-the-badge"></a>
   <a href="./README.ko.md"><img alt="Language-Korean" src="https://img.shields.io/badge/언어-한국어-blue?style=for-the-badge"></a>
+  
 </p>
 
 ---
@@ -52,6 +53,8 @@ Pose Nudge is a powerful desktop application that uses your webcam to analyze po
   <img width="700" height="500" alt="스크린샷 2025-09-05 오후 5 02 27" src="https://github.com/user-attachments/assets/befe4249-1f40-47c8-b3d5-b5c1adece85f" />
 
   <img width="700" height="500" alt="스크린샷 2025-09-05 오후 5 03 50" src="https://github.com/user-attachments/assets/7718bc18-2e6a-4b3a-ae9a-f515a0a403bd" />
+  
+  <img width="630" height="145" alt="스크린샷 2025-09-05 오후 5 17 18" src="https://github.com/user-attachments/assets/263b3250-fbc5-47e8-ac73-a0466c7f7c1c" />
 
 </p>
 
