@@ -89,7 +89,7 @@ jobs:
           # macOS 코드 서명 및 공증용
           APPLE_SIGNING_IDENTITY: "Developer ID Application: jaeseok song (A38V4K2DHS)"
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          #APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
