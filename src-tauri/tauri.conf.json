@@ -44,9 +44,6 @@
       "../models",
       "../locales"
     ],
-    "macOS": {
-      "signingIdentity": "Developer ID Application: jaeseok song (A38V4K2DHS)"
-    },
     "createUpdaterArtifacts": true
   },
   "plugins": {

@@ -88,7 +88,7 @@ jobs: # <-- 이 최상위 'jobs' 층이 반드시 필요합니다.
           prerelease: false
           args: ${{ matrix.args }}
 
-  publish-updater-json: # <-- 두 번째 잡인 'publish-updater-json'도 jobs 아래에 있어야 합니다.
+  publish-updater-json:
     if: startsWith(github.ref, 'refs/tags/')
     needs: publish-tauri
     runs-on: ubuntu-latest
@@ -98,26 +98,42 @@ jobs: # <-- 이 최상위 'jobs' 층이 반드시 필요합니다.
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download all release assets from artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts/
+      # [삭제] 아티팩트를 다운로드하는 스텝은 더 이상 필요 없습니다.
+      # - name: Download all release assets from artifacts
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     path: artifacts/
+
+      # [변경] 릴리즈에서 필요한 파일들만 직접 다운로드합니다.
+      - name: Download signatures from release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          mkdir -p release_assets
+          gh release download ${{ github.ref_name }} --dir release_assets --pattern "*.sig"
+          gh release download ${{ github.ref_name }} --dir release_assets --pattern "*.msi.zip"
+          gh release download ${{ github.ref_name }} --dir release_assets --pattern "*.dmg"
+          echo "Downloaded assets:"
+          ls -R release_assets
 
       - name: Generate updater JSON
         id: generate_json
         run: |
           set -e
+          
+          # [변경] 검색 경로를 'artifacts'에서 'release_assets'로 변경합니다.
+          ASSETS_DIR="release_assets"
+          echo "Searching for files in $ASSETS_DIR directory..."
+          ls -R $ASSETS_DIR
 
-          echo "Searching for files in artifacts directory..."
-          ls -R artifacts
+          SIG_WINDOWS=$(cat $(find $ASSETS_DIR -name '*.msi.zip.sig'))
+          SIG_MAC_INTEL=$(cat $(find $ASSETS_DIR -name '*.x64.dmg.sig'))
+          SIG_MAC_ARM=$(cat $(find $ASSETS_DIR -name '*.aarch64.dmg.sig'))
 
-          SIG_WINDOWS=$(cat $(find artifacts -name '*.msi.zip.sig'))
-          SIG_MAC_INTEL=$(cat $(find artifacts -name '*.x64.dmg.sig'))
-          SIG_MAC_ARM=$(cat $(find artifacts -name '*.aarch64.dmg.sig'))
-
-          URL_WINDOWS="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename $(find artifacts -name '*.msi.zip'))"
-          URL_MAC_INTEL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename $(find artifacts -name '*.x64.dmg'))"
-          URL_MAC_ARM="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename $(find artifacts -name '*.aarch64.dmg'))"
+          URL_WINDOWS="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename $(find $ASSETS_DIR -name '*.msi.zip'))"
+          URL_MAC_INTEL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename $(find $ASSETS_DIR -name '*.x64.dmg'))"
+          URL_MAC_ARM="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename $(find $ASSETS_DIR -name '*.aarch64.dmg'))"
 
           JSON_CONTENT=$(jq -n \
             --arg version "${{ github.ref_name }}" \
