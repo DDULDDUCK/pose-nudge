@@ -8,88 +8,20 @@ on:
 
 jobs:
   publish-tauri:
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: 'macos-latest'
-            args: '--target aarch64-apple-darwin'
-          - platform: 'macos-latest'
-            args: '--target x86_64-apple-darwin'
-          - platform: 'ubuntu-22.04'
-            args: ''
-          - platform: 'windows-latest'
-            args: ''
-
+    # ... (이전 부분은 동일) ...
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install dependencies (Ubuntu only)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-          cache: 'npm'
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: Install frontend dependencies
-        run: npm ci
-
+      # ... (의존성 설치 등 다른 스텝들은 동일) ...
       - name: Install Apple Certificate and Keychain
-        if: runner.os == 'macOS'
-        env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-        run: |
-          # 1. 인증서를 파일로 디코딩
-          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
-          
-          # 2. 새로운 키체인 생성 (비밀번호는 단순하게 유지해도 괜찮음)
-          security create-keychain -p "temp_keychain_password" build.keychain
-          
-          # 3. 새로 만든 키체인을 기본 키체인으로 설정
-          security default-keychain -s build.keychain
-          
-          # 4. 키체인 잠금 해제
-          security unlock-keychain -p "temp_keychain_password" build.keychain
-          
-          # 5. 인증서 가져오기
-          security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
-          
-          # 👇 [수정 1] 키체인이 자동으로 잠기지 않도록 타임아웃을 길게 설정 (예: 2시간)
-          security set-keychain-settings -t 7200 -u build.keychain
-
-          # 👇 [수정 2] codesign이 키체인에 접근할 때 사용자 확인을 요구하지 않도록 설정
-          security set-key-partition-list -S apple-tool:,apple: -s -k "temp_keychain_password" build.keychain > /dev/null
+        # ... (이전 답변에서 수정한 코드를 그대로 사용) ...
 
       - name: Build and Release
         uses: tauri-apps/tauri-action@v0
+        id: tauri_build # 👈 스텝에 id를 부여하여 출력값을 참조할 수 있게 합니다.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: "Developer ID Application: jaeseok song (A38V4K2DHS)" # 직접 작성하는 방식 권장
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          # ... (다른 env 변수들은 동일) ...
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'App ${{ github.ref_name }}'
@@ -98,40 +30,48 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
+      # 👇 [추가] 생성된 에셋을 아티팩트로 업로드하는 스텝
+      - name: Upload Release Assets as Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ runner.os }}-${{ matrix.args || 'default' }}
+          path: |
+            ${{ steps.tauri_build.outputs.releaseUploadUrl }}/../*.sig
+            ${{ steps.tauri_build.outputs.releaseUploadUrl }}/../*.msi.zip
+            ${{ steps.tauri_build.outputs.releaseUploadUrl }}/../*.dmg
+
   # 태그 기반 릴리즈 시에만 업데이터용 JSON 파일 생성 및 업로드
   publish-updater-json:
     if: startsWith(github.ref, 'refs/tags/')
     needs: publish-tauri
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 릴리즈 에셋을 업로드하기 위해
+      contents: write
     steps:
-      - name: Download signature files
-        run: |
-          # 1. 효율적으로 .sig 파일과 .zip 파일(윈도우)만 다운로드
-          gh release download ${{ github.ref_name }} --pattern "*.sig"
-          gh release download ${{ github.ref_name }} --pattern "*.msi.zip"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # 👇 [추가] 아티팩트를 다운로드하는 스텝
+      - name: Download all release assets
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/ # 모든 아티팩트를 이 디렉토리 아래에 다운로드
 
+      # 👇 [수정] 다운로드한 아티팩트에서 파일 경로를 찾도록 수정
       - name: Generate updater JSON
         id: generate_json
         run: |
-          set -e # 오류 발생 시 즉시 중단
+          set -e
 
-          # 플랫폼별로 서명 파일 내용 읽기
-          SIG_WINDOWS=$(cat *.msi.zip.sig)
-          SIG_MAC_INTEL=$(cat *.x64.dmg.sig)
-          SIG_MAC_ARM=$(cat *.aarch64.dmg.sig)
+          # 아티팩트가 os별 디렉토리에 저장되므로 find 명령으로 파일을 찾습니다.
+          SIG_WINDOWS=$(cat $(find artifacts -name '*.msi.zip.sig'))
+          SIG_MAC_INTEL=$(cat $(find artifacts -name '*.x64.dmg.sig'))
+          SIG_MAC_ARM=$(cat $(find artifacts -name '*.aarch64.dmg.sig'))
 
-          # 다운로드 URL 생성 (파일을 직접 다운로드할 필요 없이 이름만으로 URL 구성)
-          # 'ls' 명령으로 파일명을 찾아 URL을 만듭니다.
-          URL_WINDOWS="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename *.msi.zip)"
-          # macOS .dmg 파일은 다운로드하지 않았지만, .sig 파일 이름에서 유추하여 URL을 만듭니다.
-          URL_MAC_INTEL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename *.x64.dmg.sig .sig)"
-          URL_MAC_ARM="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename *.aarch64.dmg.sig .sig)"
+          # URL은 GitHub 릴리즈 페이지의 구조를 따릅니다.
+          # 파일명은 다운로드한 파일에서 가져옵니다.
+          URL_WINDOWS="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename $(find artifacts -name '*.msi.zip'))"
+          URL_MAC_INTEL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename $(find artifacts -name '*.x64.dmg'))"
+          URL_MAC_ARM="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename $(find artifacts -name '*.aarch64.dmg'))"
 
-          # jq를 사용하여 새로운 JSON 파일 생성
+          # jq를 사용하여 JSON 생성 (이 부분은 동일)
           JSON_CONTENT=$(jq -n \
             --arg version "${{ github.ref_name }}" \
             --arg notes "Release notes for ${{ github.ref_name }}" \
@@ -158,6 +98,7 @@ jobs:
           cat latest.json
           echo "json_path=latest.json" >> $GITHUB_OUTPUT
 
+      # 👇 gh release upload는 그대로 유지
       - name: Upload updater JSON to release
         run: |
           gh release upload ${{ github.ref_name }} ${{ steps.generate_json.outputs.json_path }} --clobber
