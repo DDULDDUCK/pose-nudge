@@ -61,7 +61,15 @@
     "step2": "开始监控",
     "step2Desc": "打开监控开关，开始实时姿势分析。",
     "step3": "改善姿势",
-    "step3Desc": "按照通知和建议保持正确姿势。"
+    "step3Desc": "按照通知和建议保持正确姿势。",
+    "loading": "加载中...",
+    "unknown": "未知",
+    "checkingUpdate": "正在检查更新...",
+    "updateAvailable": "新版本 {{version}} 可用。({{date}})",
+    "upToDate": "已是最新版本。",
+    "updateFailed": "更新检查失败",
+    "checking": "检查中...",
+    "checkUpdate": "检查更新"
   },
   "app": {
     "logoAlt": "Pose Nudge 标志",
@@ -74,6 +82,12 @@
     "languagePlaceholder": "请选择语言",
     "languageKorean": "한국어",
     "languageEnglish": "English",
+    "languageJapanese": "日本語",
+    "languageChinese": "简体中文",
+    "themeTitle": "主题设置",
+    "themeLight": "明亮主题",
+    "themeDark": "暗色主题",
+    "themeSystem": "系统设置",
     "cameraTitle": "摄像头设置",
     "cameraGuide": "摄像头无法使用时，请点击下方按钮，在系统设置中允许应用访问摄像头。",
     "cameraGoTo": "前往摄像头设置",
@@ -105,7 +119,15 @@
     "notificationTitle": "通知设置",
     "notificationGuide": "未收到通知时，请点击下方按钮，在系统设置中允许应用通知权限。",
     "notificationGoTo": "前往通知设置",
-    "notificationSwitch": "姿势纠正通知"
+    "notificationSwitch": "姿势纠正通知",
+    "updateTitle": "更新设置",
+    "updateGuide": "检查新版本并自动安装更新。",
+    "checkUpdate": "检查更新",
+    "checkingUpdate": "正在检查更新...",
+    "updateFound": "发现更新: {{version}} ({{date}})",
+    "updateInstalled": "更新已安装。请重新启动应用。",
+    "upToDate": "已是最新版本。",
+    "updateFailed": "更新检查失败"
   },
   "webcam": {
     "initModel": "AI模型初始化中...",

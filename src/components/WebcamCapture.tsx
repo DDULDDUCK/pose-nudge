@@ -41,9 +41,9 @@ interface MonitoringStatus {
 const StatusItem: React.FC<{ label: string; isBad: boolean; detectedText?: string; }> = ({ label, isBad, detectedText }) => {
   const { t } = useTranslation();
   return (
-    <div className="flex items-center justify-between rounded-lg p-3 bg-slate-50">
-      <span className="text-sm font-medium text-slate-700">{t(label)}</span>
-      <div className={`flex items-center gap-2 text-sm font-semibold ${isBad ? 'text-red-500' : 'text-emerald-500'}`}>
+    <div className="flex items-center justify-between rounded-lg p-3 bg-muted">
+      <span className="text-sm font-medium text-foreground">{t(label)}</span>
+      <div className={`flex items-center gap-2 text-sm font-semibold ${isBad ? 'text-destructive' : 'text-green-600 dark:text-green-400'}`}>
         {isBad ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
         <span>
           {isBad
@@ -206,7 +206,7 @@ const WebcamCapture: React.FC = () => {
                 videoConstraints={videoConstraints} 
                 onUserMedia={onUserMedia} 
                 onUserMediaError={onUserMediaError} 
-                className="w-full h-full object-contain aspect-video transition-all bg-slate-200"
+                className="w-full h-full object-contain aspect-video transition-all bg-muted"
                 screenshotFormat="image/jpeg"
               />
               <div className={`absolute inset-0 transition-all ring-4 ring-inset pointer-events-none ${getPostureStatusColor(analysisResult?.posture_score)}`} />
@@ -234,9 +234,9 @@ const WebcamCapture: React.FC = () => {
                   </div>
                   <div className="space-y-3">
                     {analysisResult.recommendations.length > 0 && (
-                      <div className="p-3 bg-blue-50 rounded-lg">
-                        <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-blue-800"><Lightbulb className="h-4 w-4"/>{t('dashboard.tipsTitle', '개선 팁')}</h4>
-                        <ul className="space-y-1 text-xs text-blue-700 list-disc list-inside">
+                      <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                        <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-blue-800 dark:text-blue-200"><Lightbulb className="h-4 w-4"/>{t('dashboard.tipsTitle', '개선 팁')}</h4>
+                        <ul className="space-y-1 text-xs text-blue-700 dark:text-blue-300 list-disc list-inside">
                           {analysisResult.recommendations.map((rec, i) => (
                             <li key={i}>
                               {t(
@@ -251,7 +251,7 @@ const WebcamCapture: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-10 text-slate-500">
+                <div className="text-center py-10 text-muted-foreground">
                   <CameraOff className="mx-auto h-12 w-12 mb-2" />
                   <p>{t('webcam.monitoringInactive', '모니터링 비활성화 상태')}</p>
                 </div>
@@ -266,7 +266,7 @@ const WebcamCapture: React.FC = () => {
             <CardHeader><CardTitle>{t('webcam.controlPanel', '컨트롤 패널')}</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               {/* ★★★★★ 변경: 시작/중지 버튼을 상태 표시 UI로 대체 ★★★★★ */}
-              <div className={`w-full p-4 rounded-lg text-center font-semibold ${isMonitoring ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+              <div className={`w-full p-4 rounded-lg text-center font-semibold ${isMonitoring ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-muted text-muted-foreground'}`}>
                 {isMonitoring ? (
                   <div className="flex items-center justify-center gap-2">
                     <Activity className="h-5 w-5" />
@@ -284,20 +284,20 @@ const WebcamCapture: React.FC = () => {
               </p>
               
               <div className="flex justify-around text-sm pt-2">
-                <span className={`flex items-center gap-1.5 ${isWebcamReady ? 'text-emerald-600' : 'text-slate-400'}`}><Camera className="h-4 w-4"/>{t('webcam.webcam', '웹캠')} {isWebcamReady ? 'ON' : 'OFF'}</span>
-                <span className={`flex items-center gap-1.5 ${isModelInitialized ? 'text-emerald-600' : 'text-slate-400'}`}><Cpu className="h-4 w-4"/>{t('webcam.aiModel', 'AI 모델')} {isModelInitialized ? 'ON' : 'OFF'}</span>
+                <span className={`flex items-center gap-1.5 ${isWebcamReady ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}><Camera className="h-4 w-4"/>{t('webcam.webcam', '웹캠')} {isWebcamReady ? 'ON' : 'OFF'}</span>
+                <span className={`flex items-center gap-1.5 ${isModelInitialized ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}><Cpu className="h-4 w-4"/>{t('webcam.aiModel', 'AI 모델')} {isModelInitialized ? 'ON' : 'OFF'}</span>
               </div>
             </CardContent>
             {/* 에러 및 초기화 진행 상태 표시 */}
             {(error || initializationProgress) && (
               <div className="mt-2 space-y-1">
                 {error && (
-                  <div className="text-xs text-red-600 font-semibold px-2 py-1 rounded bg-red-50 border border-red-200">
+                  <div className="text-xs text-destructive font-semibold px-2 py-1 rounded bg-destructive/10 border border-destructive/20">
                     {error}
                   </div>
                 )}
                 {initializationProgress && (
-                  <div className="text-xs text-slate-500 px-2 py-1 rounded bg-slate-50 border border-slate-200">
+                  <div className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted border border-border">
                     {initializationProgress}
                   </div>
                 )}
@@ -310,12 +310,12 @@ const WebcamCapture: React.FC = () => {
                 {calibrationStatus === 'calibrating' ? t('webcam.saving', '저장 중...') : t('webcam.setCurrentPosture', '현재 자세를 기준으로 설정')}
               </Button>
               <p className="text-xs text-muted-foreground mt-2">{t('webcam.calibrationGuide', '바른 자세를 취한 후 버튼을 눌러 기준점을 설정하세요.')}</p>
-              {calibrationStatus === 'success' && <p className="text-xs text-emerald-600 mt-1">✅ {t('webcam.saveSuccess', '성공적으로 저장되었습니다.')}</p>}
-              {calibrationStatus === 'error' && <p className="text-xs text-red-600 mt-1">❌ {t('webcam.saveError', '저장에 실패했습니다.')}</p>}
+              {calibrationStatus === 'success' && <p className="text-xs text-green-600 dark:text-green-400 mt-1">✅ {t('webcam.saveSuccess', '성공적으로 저장되었습니다.')}</p>}
+              {calibrationStatus === 'error' && <p className="text-xs text-destructive mt-1">❌ {t('webcam.saveError', '저장에 실패했습니다.')}</p>}
               {calibratedImage && (
                 <div className="mt-4">
-                  <p className="text-xs font-semibold mb-2 text-slate-600">{t('webcam.savedPosture', '저장된 자세:')}</p>
-                  <div className="relative w-28 h-auto aspect-[4/3] rounded-lg overflow-hidden cursor-pointer group border-2 border-slate-200" onClick={() => setIsPreviewOpen(true)}>
+                  <p className="text-xs font-semibold mb-2 text-muted-foreground">{t('webcam.savedPosture', '저장된 자세:')}</p>
+                  <div className="relative w-28 h-auto aspect-[4/3] rounded-lg overflow-hidden cursor-pointer group border-2 border-border" onClick={() => setIsPreviewOpen(true)}>
                     <img src={calibratedImage} alt={t('webcam.calibratedThumbnail', 'Calibrated posture thumbnail')} className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
                       <ZoomIn className="h-8 w-8 text-white" />

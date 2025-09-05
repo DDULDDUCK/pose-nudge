@@ -7,6 +7,7 @@ import { platform } from '@tauri-apps/plugin-os';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import { check } from '@tauri-apps/plugin-updater';
+import { useTheme } from 'next-themes';
 
 // --- LocalStorage Keys ---
 const LANGUAGE_KEY = "pose_nudge_language";
@@ -102,7 +103,7 @@ const DetectionSettings = () => {
                 <div className="flex items-center justify-between">
                     <div className="space-y-1">
                       <span className="font-medium">{t('settings.monitoringInterval', '모니터링 주기')}</span>
-                      <p className="text-sm text-gray-500">{t('settings.monitoringIntervalDesc', '자세를 분석하는 시간 간격을 설정합니다.')}</p>
+                      <p className="text-sm text-muted-foreground">{t('settings.monitoringIntervalDesc', '자세를 분석하는 시간 간격을 설정합니다.')}</p>
                     </div>
                     <Select value={monitoringInterval} onValueChange={setMonitoringInterval}>
                         <SelectTrigger className="w-[250px]"><SelectValue /></SelectTrigger>
@@ -119,7 +120,7 @@ const DetectionSettings = () => {
                 <div className="flex items-center justify-between">
                     <div className="space-y-1">
                       <span className="font-medium">{t('settings.notificationFrequency', '알림 빈도')}</span>
-                      <p className="text-sm text-gray-500">{t('settings.notificationFrequencyDesc', '최근 3번의 감지 중 몇 번 이상 나쁜 자세가 감지되면 알림을 받을지 설정합니다.')}</p>
+                      <p className="text-sm text-muted-foreground">{t('settings.notificationFrequencyDesc', '최근 3번의 감지 중 몇 번 이상 나쁜 자세가 감지되면 알림을 받을지 설정합니다.')}</p>
                     </div>
                     <Select value={frequency} onValueChange={setFrequency}>
                         <SelectTrigger className="w-[250px]"><SelectValue /></SelectTrigger>
@@ -133,7 +134,7 @@ const DetectionSettings = () => {
                 <div className="flex items-center justify-between">
                      <div className="space-y-1">
                         <span className="font-medium">{t('settings.turtleNeckSensitivity', '거북목 감지 강도')}</span>
-                         <p className="text-sm text-gray-500">{t('settings.turtleNeckSensitivityDesc', '거북목 자세를 얼마나 엄격하게 감지할지 설정합니다.')}</p>
+                         <p className="text-sm text-muted-foreground">{t('settings.turtleNeckSensitivityDesc', '거북목 자세를 얼마나 엄격하게 감지할지 설정합니다.')}</p>
                     </div>
                     <Select value={turtleNeckSensitivity} onValueChange={setTurtleNeckSensitivity}>
                         <SelectTrigger className="w-[250px]"><SelectValue /></SelectTrigger>
@@ -147,7 +148,7 @@ const DetectionSettings = () => {
                 <div className="flex items-center justify-between">
                     <div className="space-y-1">
                         <span className="font-medium">{t('settings.shoulderSensitivity', '어깨 정렬 감지 강도')}</span>
-                        <p className="text-sm text-gray-500">{t('settings.shoulderSensitivityDesc', '어깨 비대칭을 얼마나 엄격하게 감지할지 설정합니다.')}</p>
+                        <p className="text-sm text-muted-foreground">{t('settings.shoulderSensitivityDesc', '어깨 비대칭을 얼마나 엄격하게 감지할지 설정합니다.')}</p>
                     </div>
                     <Select value={shoulderSensitivity} onValueChange={setShoulderSensitivity}>
                         <SelectTrigger className="w-[250px]"><SelectValue /></SelectTrigger>
@@ -256,11 +257,11 @@ const UpdateSettings = () => {
 
     const checkForUpdates = async () => {
         try {
-            setUpdateStatus('업데이트 확인 중...');
+            setUpdateStatus(t('settings.checkingUpdate', '업데이트 확인 중...'));
             const update = await check();
 
             if (update) {
-                setUpdateStatus(`업데이트 발견: ${update.version} (${update.date})`);
+                setUpdateStatus(t('settings.updateFound', '업데이트 발견: {{version}} ({{date}})', { version: update.version, date: update.date }));
                 console.log(`found update ${update.version} from ${update.date} with notes ${update.body}`);
 
                 // 업데이트 다운로드 및 설치
@@ -283,13 +284,13 @@ const UpdateSettings = () => {
                     }
                 });
 
-                setUpdateStatus('업데이트 설치 완료. 앱을 재시작해주세요.');
+                setUpdateStatus(t('settings.updateInstalled', '업데이트 설치 완료. 앱을 재시작해주세요.'));
             } else {
-                setUpdateStatus('최신 버전입니다.');
+                setUpdateStatus(t('settings.upToDate', '최신 버전입니다.'));
             }
         } catch (error) {
             console.error('업데이트 확인 실패:', error);
-            setUpdateStatus('업데이트 확인 실패');
+            setUpdateStatus(t('settings.updateFailed', '업데이트 확인 실패'));
         }
     };
 
@@ -308,6 +309,35 @@ const UpdateSettings = () => {
                         <p className="mt-2 text-sm">{updateStatus}</p>
                     )}
                 </div>
+            </CardContent>
+        </Card>
+    );
+};
+
+const ThemeSettings = () => {
+    const { t } = useTranslation();
+    const { theme, setTheme } = useTheme();
+
+    const handleThemeChange = (value: string) => {
+        setTheme(value);
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>{t('settings.themeTitle', '테마 설정')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <Select value={theme} onValueChange={handleThemeChange}>
+                    <SelectTrigger className="w-[250px]">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="light">{t('settings.themeLight', '밝은 테마')}</SelectItem>
+                        <SelectItem value="dark">{t('settings.themeDark', '어두운 테마')}</SelectItem>
+                        <SelectItem value="system">{t('settings.themeSystem', '시스템 설정')}</SelectItem>
+                    </SelectContent>
+                </Select>
             </CardContent>
         </Card>
     );
@@ -353,6 +383,7 @@ const SettingsPage = () => {
     return (
         <div className="space-y-6 p-4 md:p-6">
             <LanguageSettings />
+            <ThemeSettings />
             <DetectionSettings />
             <CameraSettings />
             <NotificationSettings />

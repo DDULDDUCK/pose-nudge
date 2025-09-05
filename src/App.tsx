@@ -1,6 +1,8 @@
 // src/App.tsx
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getVersion } from '@tauri-apps/api/app';
+import { check } from '@tauri-apps/plugin-updater';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Dashboard from '@/components/Dashboard';
@@ -18,9 +20,44 @@ import './i18n';
 import { useTranslation } from 'react-i18next';
 // --- 페이지 컴포넌트 정의 ---
 
-// 정보 페이지 컴포넌트 (기존 코드와 동일)
+// 정보 페이지 컴포넌트
 const AboutPage = () => {
   const { t } = useTranslation();
+  const [currentVersion, setCurrentVersion] = useState<string>(t('about.loading', '로딩 중...'));
+  const [updateStatus, setUpdateStatus] = useState<string>('');
+  const [checkingUpdate, setCheckingUpdate] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchVersion = async () => {
+      try {
+        const version = await getVersion();
+        setCurrentVersion(version);
+      } catch (error) {
+        console.error('버전 가져오기 실패:', error);
+        setCurrentVersion(t('about.unknown', '알 수 없음'));
+      }
+    };
+    fetchVersion();
+  }, [t]);
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true);
+    setUpdateStatus(t('about.checkingUpdate', '업데이트 확인 중...'));
+    try {
+      const update = await check();
+      if (update) {
+        setUpdateStatus(t('about.updateAvailable', '새로운 버전 {{version}}이 있습니다. ({{date}})', { version: update.version, date: update.date }));
+      } else {
+        setUpdateStatus(t('about.upToDate', '현재 최신 버전입니다.'));
+      }
+    } catch (error) {
+      console.error('업데이트 확인 실패:', error);
+      setUpdateStatus(t('about.updateFailed', '업데이트 확인 실패'));
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -28,9 +65,15 @@ const AboutPage = () => {
           <CardHeader><CardTitle>{t('about.appInfo', '앱 정보')}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <div className="flex justify-between"><span className="font-medium">{t('about.version', '버전')}</span><span>0.1.0</span></div>
+              <div className="flex justify-between"><span className="font-medium">{t('about.version', '버전')}</span><span>{currentVersion}</span></div>
               <div className="flex justify-between"><span className="font-medium">{t('about.developer', '개발자')}</span><span>dduldduck</span></div>
               <div className="flex justify-between"><span className="font-medium">{t('about.build', '빌드')}</span><span>Tauri + React</span></div>
+            </div>
+            <div className="pt-4 border-t">
+              <Button onClick={handleCheckUpdate} disabled={checkingUpdate} className="w-full">
+                {checkingUpdate ? t('about.checking', '확인 중...') : t('about.checkUpdate', '업데이트 확인')}
+              </Button>
+              {updateStatus && <p className="mt-2 text-sm text-center">{updateStatus}</p>}
             </div>
           </CardContent>
         </Card>
@@ -98,9 +141,9 @@ function App() {
   const activeLabel = t(`nav.${activeComponentId}`, activeComponentId);
 
   return (
-    <div className="flex h-screen bg-gray-50 text-gray-900">
+      <div className="flex h-screen bg-background text-foreground">
       {/* 사이드바 */}
-      <aside className="w-64 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col">
+      <aside className="w-64 flex-shrink-0 bg-card border-r border-border flex flex-col">
         <div className="h-16 flex items-center justify-center px-6 border-b">
           <div className="flex items-center gap-3">
             <img
@@ -134,7 +177,7 @@ function App() {
 
       {/* 메인 컨텐츠 */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-16 bg-white border-b flex items-center px-8">
+        <header className="h-16 bg-card border-b border-border flex items-center px-8">
           <h2 className="text-2xl font-bold">{activeLabel}</h2>
         </header>
         <main className="flex-1 overflow-y-auto p-8">

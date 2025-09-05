@@ -61,7 +61,15 @@
     "step2": "모니터링 시작",
     "step2Desc": "모니터링 스위치를 켜서 실시간 자세 분석을 시작하세요.",
     "step3": "자세 개선",
-    "step3Desc": "알림과 권장사항을 따라 바른 자세를 유지하세요."
+    "step3Desc": "알림과 권장사항을 따라 바른 자세를 유지하세요.",
+    "loading": "로딩 중...",
+    "unknown": "알 수 없음",
+    "checkingUpdate": "업데이트 확인 중...",
+    "updateAvailable": "새로운 버전 {{version}}이 있습니다. ({{date}})",
+    "upToDate": "현재 최신 버전입니다.",
+    "updateFailed": "업데이트 확인 실패",
+    "checking": "확인 중...",
+    "checkUpdate": "업데이트 확인"
   },
   "app": {
     "logoAlt": "Pose Nudge 로고",
@@ -74,6 +82,12 @@
     "languagePlaceholder": "언어를 선택하세요",
     "languageKorean": "한국어",
     "languageEnglish": "English",
+    "languageJapanese": "日本語",
+    "languageChinese": "简体中文",
+    "themeTitle": "테마 설정",
+    "themeLight": "밝은 테마",
+    "themeDark": "어두운 테마",
+    "themeSystem": "시스템 설정",
     "cameraTitle": "카메라 설정",
     "cameraGuide": "카메라가 작동하지 않는 경우, 아래 버튼을 클릭하여 시스템 설정에서 앱의 카메라 접근 권한을 허용해주세요.",
     "cameraGoTo": "카메라 설정으로 이동",
@@ -105,7 +119,15 @@
     "notificationTitle": "알림 설정",
     "notificationGuide": "알림이 오지 않는 경우, 아래 버튼을 클릭하여 시스템 설정에서 앱의 알림 권한을 허용해주세요.",
     "notificationGoTo": "알림 설정으로 이동",
-    "notificationSwitch": "자세 교정 알림"
+    "notificationSwitch": "자세 교정 알림",
+    "updateTitle": "업데이트 설정",
+    "updateGuide": "새로운 버전이 있는지 확인하고 자동으로 업데이트를 설치합니다.",
+    "checkUpdate": "업데이트 확인",
+    "checkingUpdate": "업데이트 확인 중...",
+    "updateFound": "업데이트 발견: {{version}} ({{date}})",
+    "updateInstalled": "업데이트 설치 완료. 앱을 재시작해주세요.",
+    "upToDate": "최신 버전입니다.",
+    "updateFailed": "업데이트 확인 실패"
   },
   "webcam": {
     "initModel": "AI 모델 초기화 중...",

@@ -10,6 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import { Activity, Bell, Clock, Target, AlertCircle, CheckCircle, RefreshCw, Sparkles, LineChart } from 'lucide-react';
 import { ResponsiveContainer, LineChart as RechartsLineChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line } from 'recharts';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from 'next-themes';
 // 컴포넌트 내부에서 사용할 타입 정의
 interface DashboardStats {
   total_sessions: number;
@@ -41,6 +42,7 @@ const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string |
 
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
+  const { theme } = useTheme();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [chartData, setChartData] = useState<DailyScore[]>([]);
   const recommendations = [
@@ -164,7 +166,7 @@ const Dashboard: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* 왼쪽: 메인 점수 및 추천 */}
           <div className="lg:col-span-1 space-y-6">
-            <Card className="shadow-lg bg-gradient-to-br from-blue-50 to-indigo-100">
+            <Card className="shadow-lg">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Target className="h-5 w-5 text-blue-600" />
@@ -174,7 +176,7 @@ const Dashboard: React.FC = () => {
               <CardContent className="flex flex-col items-center justify-center space-y-4">
                 <div className="relative h-48 w-48">
                   <svg className="h-full w-full" viewBox="0 0 100 100">
-                    <circle className="stroke-current text-gray-200" strokeWidth="10" cx="50" cy="50" r="40" fill="transparent"></circle>
+                    <circle className="stroke-current text-muted" strokeWidth="10" cx="50" cy="50" r="40" fill="transparent"></circle>
                     <circle
                       className={`stroke-current ${getScoreRingColor(stats.average_posture_score)} transition-all duration-500`}
                       strokeWidth="10" cx="50" cy="50" r="40" fill="transparent"
@@ -234,7 +236,7 @@ const Dashboard: React.FC = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" stroke="#888888" fontSize={12} />
                     <YAxis stroke="#888888" fontSize={12} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ backgroundColor: "rgba(255, 255, 255, 0.8)", border: "1px solid #ccc", borderRadius: "0.5rem", }} />
+                    <Tooltip />
                     <Legend />
                     <Line type="monotone" dataKey="score" stroke="#10b981" strokeWidth={2} name={t('dashboard.chartLegend')} />
                   </RechartsLineChart>
@@ -250,14 +252,14 @@ const Dashboard: React.FC = () => {
                           <span className="text-sm font-medium text-emerald-600">{t('dashboard.goodPosture')}</span>
                           <span className="text-sm font-medium text-emerald-600">{formatTime(stats.good_posture_time)}</span>
                       </div>
-                      <Progress value={stats.session_time > 0 ? (stats.good_posture_time / stats.session_time) * 100 : 0} className="[&>div]:bg-emerald-500" />
+                      <Progress value={stats.session_time > 0 ? (stats.good_posture_time / stats.session_time) * 100 : 0} className="[&>div]:bg-green-500 dark:[&>div]:bg-green-400" />
                   </div>
                   <div>
                       <div className="flex justify-between mb-1">
                           <span className="text-sm font-medium text-red-600">{t('dashboard.badPosture')}</span>
                           <span className="text-sm font-medium text-red-600">{formatTime(stats.session_time - stats.good_posture_time)}</span>
                       </div>
-                      <Progress value={stats.session_time > 0 ? ((stats.session_time - stats.good_posture_time) / stats.session_time) * 100 : 0} className="[&>div]:bg-red-500" />
+                      <Progress value={stats.session_time > 0 ? ((stats.session_time - stats.good_posture_time) / stats.session_time) * 100 : 0} className="[&>div]:bg-red-500 dark:[&>div]:bg-red-400" />
                   </div>
               </CardContent>
             </Card>

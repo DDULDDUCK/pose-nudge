@@ -61,7 +61,15 @@
     "step2": "モニタリング開始",
     "step2Desc": "モニタリングスイッチをオンにしてリアルタイム姿勢分析を開始してください。",
     "step3": "姿勢改善",
-    "step3Desc": "通知と提案に従って正しい姿勢を維持してください。"
+    "step3Desc": "通知と提案に従って正しい姿勢を維持してください。",
+    "loading": "読み込み中...",
+    "unknown": "不明",
+    "checkingUpdate": "アップデート確認中...",
+    "updateAvailable": "新しいバージョン {{version}} が利用可能です。({{date}})",
+    "upToDate": "最新バージョンです。",
+    "updateFailed": "アップデート確認失敗",
+    "checking": "確認中...",
+    "checkUpdate": "アップデート確認"
   },
   "app": {
     "logoAlt": "Pose Nudge ロゴ",
@@ -74,6 +82,12 @@
     "languagePlaceholder": "言語を選択してください",
     "languageKorean": "한국어",
     "languageEnglish": "English",
+    "languageJapanese": "日本語",
+    "languageChinese": "简体中文",
+    "themeTitle": "テーマ設定",
+    "themeLight": "明るいテーマ",
+    "themeDark": "暗いテーマ",
+    "themeSystem": "システム設定",
     "cameraTitle": "カメラ設定",
     "cameraGuide": "カメラが動作しない場合は、下のボタンをクリックしてシステム設定でアプリのカメラアクセス権限を許可してください。",
     "cameraGoTo": "カメラ設定に移動",
@@ -105,7 +119,15 @@
     "notificationTitle": "通知設定",
     "notificationGuide": "通知が届かない場合は、下のボタンをクリックしてシステム設定でアプリの通知権限を許可してください。",
     "notificationGoTo": "通知設定に移動",
-    "notificationSwitch": "姿勢改善通知"
+    "notificationSwitch": "姿勢改善通知",
+    "updateTitle": "アップデート設定",
+    "updateGuide": "新しいバージョンを確認し、自動的にアップデートをインストールします。",
+    "checkUpdate": "アップデート確認",
+    "checkingUpdate": "アップデート確認中...",
+    "updateFound": "アップデート発見: {{version}} ({{date}})",
+    "updateInstalled": "アップデートインストール完了。アプリを再起動してください。",
+    "upToDate": "最新バージョンです。",
+    "updateFailed": "アップデート確認失敗"
   },
   "webcam": {
     "initModel": "AIモデル初期化中...",
