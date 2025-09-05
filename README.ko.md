@@ -8,19 +8,19 @@
 
 <p align="center">
   <!-- 소셜 및 커뮤니티 배지 -->
-  <a href="https://github.com/your-username/pose-nudge/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/your-username/pose-nudge?style=for-the-badge&logo=github&color=gold"></a>
-  <a href="https://github.com/your-username/pose-nudge/network/members"><img alt="GitHub Forks" src="https://img.shields.io/github/forks/your-username/pose-nudge?style=for-the-badge&logo=github&color=blueviolet"></a>
-  <a href="https://github.com/your-username/pose-nudge/graphs/contributors"><img alt="All Contributors" src="https://img.shields.io/github/all-contributors/your-username/pose-nudge?style=for-the-badge&color=orange"></a>
+  <a href="https://github.com/dduldduck/pose-nudge/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/dduldduck/pose-nudge?style=for-the-badge&logo=github&color=gold"></a>
+  <a href="https://github.com/dduldduck/pose-nudge/network/members"><img alt="GitHub Forks" src="https://img.shields.io/github/forks/dduldduck/pose-nudge?style=for-the-badge&logo=github&color=blueviolet"></a>
+  <a href="https://github.com/dduldduck/pose-nudge/graphs/contributors"><img alt="All Contributors" src="https://img.shields.io/github/all-contributors/dduldduck/pose-nudge?style=for-the-badge&color=orange"></a>
   <br>
   <!-- 상태 및 릴리즈 배지 -->
-  <a href="https://github.com/your-username/pose-nudge/releases"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/your-username/pose-nudge?style=for-the-badge&color=brightgreen"></a>
-  <a href="https://github.com/your-username/pose-nudge/releases"><img alt="GitHub Downloads" src="https://img.shields.io/github/downloads/your-username/pose-nudge/total?style=for-the-badge&logo=github&color=success"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/your-username/pose-nudge?style=for-the-badge&color=informational"></a>
+  <a href="https://github.com/dduldduck/pose-nudge/releases"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/dduldduck/pose-nudge?style=for-the-badge&color=brightgreen"></a>
+  <a href="https://github.com/dduldduck/pose-nudge/releases"><img alt="GitHub Downloads" src="https://img.shields.io/github/downloads/dduldduck/pose-nudge/total?style=for-the-badge&logo=github&color=success"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/dduldduck/pose-nudge?style=for-the-badge&color=informational"></a>
   <br>
   <!-- 개발 활동 배지 -->
-  <a href="https://github.com/your-username/pose-nudge/actions/workflows/release.yml"><img alt="Build Status" src="https://img.shields.io/github/actions/workflow/status/your-username/pose-nudge/release.yml?branch=main&style=for-the-badge&logo=githubactions"></a>
-  <a href="https://github.com/your-username/pose-nudge/issues"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/your-username/pose-nudge?style=for-the-badge&logo=github&color=red"></a>
-  <a href="https://github.com/your-username/pose-nudge/pulls"><img alt="GitHub Pull Requests" src="https://img.shields.io/github/issues-pr/your-username/pose-nudge?style=for-the-badge&logo=github&color=yellow"></a>
+  <a href="https://github.com/dduldduck/pose-nudge/actions/workflows/release.yml"><img alt="Build Status" src="https://img.shields.io/github/actions/workflow/status/dduldduck/pose-nudge/release.yml?branch=main&style=for-the-badge&logo=githubactions"></a>
+  <a href="https://github.com/dduldduck/pose-nudge/issues"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/dduldduck/pose-nudge?style=for-the-badge&logo=github&color=red"></a>
+  <a href="https://github.com/dduldduck/pose-nudge/pulls"><img alt="GitHub Pull Requests" src="https://img.shields.io/github/issues-pr/dduldduck/pose-nudge?style=for-the-badge&logo=github&color=yellow"></a>
 </p>
 
 <p align="center">
@@ -49,9 +49,9 @@ Pose Nudge는 웹캠을 활용하여 실시간으로 자세를 분석하고, 거
 
 | Operating System | File Format | Download Link |
 | :---: | :---: | :---: |
-| 💻 **Windows** | `.exe` | <a href="https://github.com/your-username/pose-nudge/releases/latest"><img src="https://img.shields.io/badge/Latest_Release-Download-brightgreen?style=flat-square" /></a> |
-| 🍏 **macOS** | `.dmg` | <a href="https://github.com/your-username/pose-nudge/releases/latest"><img src="https://img.shields.io/badge/Latest_Release-Download-brightgreen?style=flat-square" /></a> |
-| 🐧 **Linux** | `.AppImage` | <a href="https://github.com/your-username/pose-nudge/releases/latest"><img src="https://img.shields.io/badge/Latest_Release-Download-brightgreen?style=flat-square" /></a> |
+| 💻 **Windows** | `.exe` | <a href="https://github.com/dduldduck/pose-nudge/releases/latest"><img src="https://img.shields.io/badge/Latest_Release-Download-brightgreen?style=flat-square" /></a> |
+| 🍏 **macOS** | `.dmg` | <a href="https://github.com/dduldduck/pose-nudge/releases/latest"><img src="https://img.shields.io/badge/Latest_Release-Download-brightgreen?style=flat-square" /></a> |
+| 🐧 **Linux** | `.AppImage` | <a href="https://github.com/dduldduck/pose-nudge/releases/latest"><img src="https://img.shields.io/badge/Latest_Release-Download-brightgreen?style=flat-square" /></a> |
 
 ---
 
@@ -69,7 +69,7 @@ Pose Nudge는 웹캠을 활용하여 실시간으로 자세를 분석하고, 거
 
 ```bash
 # 1. Clone the project
-git clone https://github.com/your-username/pose-nudge.git
+git clone https://github.com/dduldduck/pose-nudge.git
 cd pose-nudge
 
 # 2. Install Node.js dependencies
