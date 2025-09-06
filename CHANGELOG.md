@@ -5,6 +5,20 @@ All notable changes to **Pose Nudge** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-09-06
+
+### Added
+- Battery saving feature allowing users to choose continuous camera usage
+- Improved language selection with default option fixes
+- System tray icons differentiated by monitoring status for better UX
+
+### Changed
+- Enhanced user control over camera operation for better battery management
+- Improved system tray icon visibility based on monitoring state
+
+### Fixed
+- Minor bug fixes
+
 ## [1.0.1] - 2025-09-05
 
 ### Fixed
