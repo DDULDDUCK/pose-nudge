@@ -157,7 +157,6 @@ Thanks to these wonderful people who have made this project better! ([emoji key]
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/DDULDDUCK"><img src="https://avatars.githubusercontent.com/u/126528992?v=4?s=100" width="100px;" alt="Jaeseok Song"/><br /><sub><b>Jaeseok Song</b></sub></a><br /><a href="https://github.com/DDULDDUCK/pose-nudge/commits?author=DDULDDUCK" title="Code">💻</a> <a href="#maintenance-DDULDDUCK" title="Maintenance">🚧</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://adamdangoor.com"><img src="https://avatars.githubusercontent.com/u/797801?v=4?s=100" width="100px;" alt="Adam Dangoor"/><br /><sub><b>Adam Dangoor</b></sub></a><br /><a href="https://github.com/DDULDDUCK/pose-nudge/issues?q=author%3Aadamtheturtle" title="Bug reports">🐛</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/thanks"><img src="https://avatars.githubusercontent.com/u/1121545?v=4?s=100" width="100px;" alt="Thanks"/><br /><sub><b>Thanks</b></sub></a><br /><a href="https://github.com/DDULDDUCK/pose-nudge/issues?q=author%3AThanks" title="Bug reports">🐛</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/Yodoma"><img src="https://avatars.githubusercontent.com/u/163729809?v=4?s=100" width="100px;" alt="Yodoma"/><br /><sub><b>Yodoma</b></sub></a><br /><a href="https://github.com/DDULDDUCK/pose-nudge/issues?q=author%3AYodoma" title="Bug reports">🐛</a></td>
     </tr>
   </tbody>
