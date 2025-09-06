@@ -1,6 +1,6 @@
 {
-  "projectName": "pose-nodge",
-  "projectOwner": "dduldduk",
+  "projectName": "pose-nudge",
+  "projectOwner": "DDULDDUCK",
   "repoType": "github",
   "repoHost": "https://github.com",
   "files": [
@@ -19,8 +19,18 @@
         "code",
         "maintenance"
       ]
+    },
+    {
+      "login": "adamtheturtle",
+      "name": "Adam Dangoor",
+      "avatar_url": "https://avatars.githubusercontent.com/u/797801?v=4",
+      "profile": "https://adamdangoor.com",
+      "contributions": [
+        "bug"
+      ]
     }
   ],
   "contributorsPerLine": 7,
-  "linkToUsage": true
+  "linkToUsage": true,
+  "commitType": "docs"
 }

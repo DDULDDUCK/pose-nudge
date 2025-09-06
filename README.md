@@ -155,7 +155,8 @@ Thanks to these wonderful people who have made this project better! ([emoji key]
 <table>
   <tbody>
     <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/DDULDDUCK"><img src="https://avatars.githubusercontent.com/u/126528992?v=4?s=100" width="100px;" alt="Jaeseok Song"/><br /><sub><b>Jaeseok Song</b></sub></a><br /><a href="https://github.com/dduldduk/pose-nodge/commits?author=DDULDDUCK" title="Code">💻</a> <a href="#maintenance-DDULDDUCK" title="Maintenance">🚧</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/DDULDDUCK"><img src="https://avatars.githubusercontent.com/u/126528992?v=4?s=100" width="100px;" alt="Jaeseok Song"/><br /><sub><b>Jaeseok Song</b></sub></a><br /><a href="https://github.com/DDULDDUCK/pose-nudge/commits?author=DDULDDUCK" title="Code">💻</a> <a href="#maintenance-DDULDDUCK" title="Maintenance">🚧</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://adamdangoor.com"><img src="https://avatars.githubusercontent.com/u/797801?v=4?s=100" width="100px;" alt="Adam Dangoor"/><br /><sub><b>Adam Dangoor</b></sub></a><br /><a href="https://github.com/DDULDDUCK/pose-nudge/issues?q=author%3Aadamtheturtle" title="Bug reports">🐛</a></td>
     </tr>
   </tbody>
   <tfoot>
