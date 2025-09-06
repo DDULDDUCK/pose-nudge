@@ -42,7 +42,8 @@
     ],
     "resources": [
       "../models",
-      "../locales"
+      "../locales",
+      "./icons"
     ],
     "createUpdaterArtifacts": true,
     "macOS": {

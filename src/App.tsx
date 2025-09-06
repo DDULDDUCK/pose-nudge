@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getVersion } from '@tauri-apps/api/app';
 import { check } from '@tauri-apps/plugin-updater';
+import { invoke } from '@tauri-apps/api/core';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Dashboard from '@/components/Dashboard';
@@ -139,6 +140,26 @@ function App() {
 
   const ActiveComponent = navItems.find(item => item.id === activeComponentId)?.component || Dashboard;
   const activeLabel = t(`nav.${activeComponentId}`, activeComponentId);
+
+  // 앱 시작 시 설정 동기화
+  useEffect(() => {
+    const batterySavingMode = localStorage.getItem('pose_nudge_battery_saving_mode') === 'true';
+    invoke('set_battery_saving_mode', { mode: batterySavingMode }).catch(console.error);
+
+    const monitoringInterval = localStorage.getItem('pose_nudge_monitoring_interval') || '3';
+    if (batterySavingMode) {
+      invoke('set_monitoring_interval', { intervalMins: parseInt(monitoringInterval, 10) }).catch(console.error);
+    } else {
+      invoke('set_monitoring_interval', { intervalSecs: parseInt(monitoringInterval, 10) }).catch(console.error);
+    }
+
+    const frequency = batterySavingMode ? 1 : parseInt(localStorage.getItem('pose_nudge_notification_frequency') || '2', 10);
+    invoke('set_detection_settings', {
+      frequency,
+      turtleSensitivity: parseInt(localStorage.getItem('pose_nudge_turtle_neck_sensitivity') || '2', 10),
+      shoulderSensitivity: parseInt(localStorage.getItem('pose_nudge_shoulder_sensitivity') || '2', 10),
+    }).catch(console.error);
+  }, []);
 
   return (
       <div className="flex h-screen bg-background text-foreground">

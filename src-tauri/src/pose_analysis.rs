@@ -126,6 +126,12 @@ impl PoseAnalyzer {
         info!("어깨 정렬 감지 강도 변경: level {}", level);
     }
 
+    // ✨ 추가된 함수: 최근 결과 초기화 (알림 발생 시)
+    pub fn clear_recent_results(&self) {
+        self.recent_turtle_neck_results.lock().clear();
+        self.recent_shoulder_results.lock().clear();
+    }
+
     // ONNX 모델 초기화
     pub async fn initialize_model(&self, handle: AppHandle) -> Result<()> {
         info!("YOLO-pose 모델 초기화 시작...");
@@ -175,7 +181,9 @@ impl PoseAnalyzer {
         &self,
         image_buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        info!("analyze_image_buffer 시작, 이미지 크기: {}x{}", image_buffer.width(), image_buffer.height());
         if !self.is_model_initialized() {
+            info!("모델 초기화되지 않음");
             return Ok(serde_json::json!({
                 "status": "model_not_initialized",
                 "recommendations": ["AI 모델을 먼저 초기화해주세요"],
@@ -256,12 +264,14 @@ impl PoseAnalyzer {
         &self,
         image: &ImageBuffer<Rgb<u8>, Vec<u8>>,
     ) -> Result<PoseKeypoints, Box<dyn std::error::Error + Send + Sync>> {
+        info!("키포인트 추출 시작");
         let input_tensor = self.preprocess_image(image)?;
         let mut session_guard = self.session.lock();
         let session = session_guard
             .as_mut()
             .ok_or("YOLO-pose 모델이 초기화되지 않았습니다")?;
         let outputs = session.run(ort::inputs!["images" => input_tensor])?;
+        info!("모델 실행 성공");
         self.postprocess_output(&outputs, image.width(), image.height())
     }
 
@@ -270,6 +280,7 @@ impl PoseAnalyzer {
         &self,
         image: &ImageBuffer<Rgb<u8>, Vec<u8>>,
     ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+        info!("이미지 전처리 시작");
         let resized_image =
             image::imageops::resize(image, 640, 640, image::imageops::FilterType::Triangle);
         let mut input_data = Vec::with_capacity(3 * 640 * 640);
@@ -289,19 +300,23 @@ impl PoseAnalyzer {
         orig_width: u32,
         orig_height: u32,
     ) -> Result<PoseKeypoints, Box<dyn std::error::Error + Send + Sync>> {
+        info!("출력 후처리 시작");
         let output = outputs
             .get("output0")
             .ok_or("모델 출력을 찾을 수 없습니다")?;
         let (shape, data) = output.try_extract_tensor::<f32>()?;
+        info!("모델 출력 shape: {:?}", shape);
         if shape.len() != 3 || shape[1] != 56 {
             return Err("예상하지 못한 모델 출력 형식입니다".into());
         }
         let detections = shape[2] as usize;
+        info!("detections 수: {}", detections);
         let mut best_detection = None;
         let mut best_confidence = 0.0f32;
         for i in 0..detections {
             let confidence_idx = 4 * detections + i;
             let confidence = data[confidence_idx];
+            //info!("detection {} confidence: {}", i, confidence);
             if confidence > best_confidence && confidence > self.confidence_threshold {
                 best_confidence = confidence;
                 best_detection = Some(i);
@@ -309,6 +324,7 @@ impl PoseAnalyzer {
         }
         let detection_idx =
             best_detection.ok_or("신뢰할 수 있는 pose detection을 찾을 수 없습니다")?;
+        info!("최적 detection 찾음: {}", detection_idx);
         let scale_x = orig_width as f32 / 640.0;
         let scale_y = orig_height as f32 / 640.0;
         let keypoints = PoseKeypoints {
@@ -590,6 +606,7 @@ impl PoseAnalyzer {
     pub fn set_baseline_posture(
         &self,
         base64_data: &str,
+        handle: &AppHandle,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let image_data = self.decode_base64_image(base64_data)?;
         let keypoints = self.extract_pose_keypoints(&image_data)?;
@@ -608,10 +625,53 @@ impl PoseAnalyzer {
             || self.baseline_shoulder_alignment.lock().is_some()
             || self.baseline_head_forward_ratio.lock().is_some()
         {
+            self.save_baseline_to_file(handle)?;
             Ok(())
         } else {
             Err("기준 자세를 설정하기 위한 키포인트를 감지하지 못했습니다.".into())
         }
+    }
+
+    // 베이스라인을 파일에 저장
+    fn save_baseline_to_file(&self, handle: &AppHandle) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let app_data_path = handle.path().app_data_dir().map_err(|e| format!("앱 데이터 디렉토리를 찾을 수 없습니다: {}", e))?;
+        let baseline_file = app_data_path.join("baseline.json");
+
+        let baseline_data = serde_json::json!({
+            "face_shoulder_ratio": *self.baseline_face_shoulder_ratio.lock(),
+            "shoulder_alignment": *self.baseline_shoulder_alignment.lock(),
+            "head_forward_ratio": *self.baseline_head_forward_ratio.lock()
+        });
+
+        let json_str = serde_json::to_string_pretty(&baseline_data)?;
+        std::fs::write(&baseline_file, json_str)?;
+        info!("베이스라인 저장 완료: {:?}", baseline_file);
+        Ok(())
+    }
+
+    // 베이스라인을 파일에서 로드
+    pub fn load_baseline_from_file(&self, handle: &AppHandle) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let app_data_path = handle.path().app_data_dir().map_err(|e| format!("앱 데이터 디렉토리를 찾을 수 없습니다: {}", e))?;
+        let baseline_file = app_data_path.join("baseline.json");
+
+        if baseline_file.exists() {
+            let json_str = std::fs::read_to_string(&baseline_file)?;
+            let baseline_data: serde_json::Value = serde_json::from_str(&json_str)?;
+
+            if let Some(ratio) = baseline_data.get("face_shoulder_ratio").and_then(|v| v.as_f64()) {
+                *self.baseline_face_shoulder_ratio.lock() = Some(ratio as f32);
+            }
+            if let Some(alignment) = baseline_data.get("shoulder_alignment").and_then(|v| v.as_f64()) {
+                *self.baseline_shoulder_alignment.lock() = Some(alignment as f32);
+            }
+            if let Some(forward) = baseline_data.get("head_forward_ratio").and_then(|v| v.as_f64()) {
+                *self.baseline_head_forward_ratio.lock() = Some(forward as f32);
+            }
+            info!("베이스라인 로드 완료: {:?}", baseline_file);
+        } else {
+            info!("베이스라인 파일이 존재하지 않습니다: {:?}", baseline_file);
+        }
+        Ok(())
     }
 
     // 어깨 정렬 비율 계산 (어깨 비대칭 감지용)

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { Command, open } from '@tauri-apps/plugin-shell';
 import { platform } from '@tauri-apps/plugin-os';
@@ -17,6 +18,7 @@ const TURTLE_NECK_SENSITIVITY_KEY = "pose_nudge_turtle_neck_sensitivity";
 const SHOULDER_SENSITIVITY_KEY = "pose_nudge_shoulder_sensitivity";
 const CAMERA_INDEX_KEY = "pose_nudge_camera_index";
 const MONITORING_INTERVAL_KEY = "pose_nudge_monitoring_interval";
+const BATTERY_SAVING_MODE_KEY = "pose_nudge_battery_saving_mode";
 
 // --- Type Definitions ---
 interface CameraDetail {
@@ -32,12 +34,21 @@ const LanguageSettings = () => {
 
     // 앱 시작 시(컴포넌트 마운트 시) 백엔드에 현재 언어 동기화
     useEffect(() => {
-        const savedLang = localStorage.getItem(LANGUAGE_KEY) || 'ko';
-        if (savedLang && savedLang !== i18n.language) {
-            i18n.changeLanguage(savedLang);
-        }
-        invoke('set_current_language', { lang: savedLang }).catch(console.error);
-    }, [i18n]);
+    // 1. 우선순위에 따라 초기 언어를 결정합니다.
+    const initialLang = 
+        localStorage.getItem(LANGUAGE_KEY) || // 1순위: 사용자가 직접 저장한 설정
+        i18n.language ||                     // 2순위: LanguageDetector가 감지한 시스템 언어
+        'en';                                // 3순위: 모든 것이 실패했을 때의 최종 기본값
+
+    // 2. 결정된 언어로 앱의 상태를 일관되게 업데이트합니다.
+    if (initialLang !== i18n.language) {
+        i18n.changeLanguage(initialLang);
+    }
+    setLang(initialLang);
+    localStorage.setItem(LANGUAGE_KEY, initialLang);
+    invoke('set_current_language', { lang: initialLang }).catch(console.error);
+    
+    }, []);
 
     // 언어 변경 핸들러
     const handleChange = (value: string) => {
@@ -72,10 +83,16 @@ const LanguageSettings = () => {
 const DetectionSettings = () => {
     const { t } = useTranslation();
 
+    const [batterySavingMode, setBatterySavingMode] = useState(() => localStorage.getItem(BATTERY_SAVING_MODE_KEY) === 'true');
     const [frequency, setFrequency] = useState<string>(() => localStorage.getItem(NOTIFICATION_FREQUENCY_KEY) || '2');
     const [turtleNeckSensitivity, setTurtleNeckSensitivity] = useState<string>(() => localStorage.getItem(TURTLE_NECK_SENSITIVITY_KEY) || '2');
     const [shoulderSensitivity, setShoulderSensitivity] = useState<string>(() => localStorage.getItem(SHOULDER_SENSITIVITY_KEY) || '2');
     const [monitoringInterval, setMonitoringInterval] = useState<string>(() => localStorage.getItem(MONITORING_INTERVAL_KEY) || '3');
+
+    useEffect(() => {
+        // 앱 시작 시 백엔드에 절약 모드 상태 동기화
+        invoke('set_battery_saving_mode', { mode: batterySavingMode }).catch(console.error);
+    }, []);
 
     useEffect(() => {
         localStorage.setItem(NOTIFICATION_FREQUENCY_KEY, frequency);
@@ -84,16 +101,45 @@ const DetectionSettings = () => {
         localStorage.setItem(MONITORING_INTERVAL_KEY, monitoringInterval);
 
         invoke('set_detection_settings', {
-            frequency: parseInt(frequency, 10),
+            frequency: batterySavingMode ? 1 : parseInt(frequency, 10),
             turtleSensitivity: parseInt(turtleNeckSensitivity, 10),
             shoulderSensitivity: parseInt(shoulderSensitivity, 10),
         }).catch(console.error);
 
-        invoke('set_monitoring_interval', {
-            intervalSecs: parseInt(monitoringInterval, 10),
-        }).catch(console.error);
-        
-    }, [frequency, turtleNeckSensitivity, shoulderSensitivity, monitoringInterval]);
+        if (batterySavingMode) {
+            invoke('set_monitoring_interval', {
+                intervalMins: parseInt(monitoringInterval, 10),
+            }).catch(console.error);
+        } else {
+            invoke('set_monitoring_interval', {
+                intervalSecs: parseInt(monitoringInterval, 10),
+            }).catch(console.error);
+        }
+
+    }, [frequency, turtleNeckSensitivity, shoulderSensitivity, monitoringInterval, batterySavingMode]);
+
+    const monitoringOptions = batterySavingMode ? [
+        { value: '3', label: t('settings.interval3m', '3분') },
+        { value: '5', label: t('settings.interval5m', '5분') },
+        { value: '10', label: t('settings.interval10m', '10분') },
+        { value: '15', label: t('settings.interval15m', '15분') },
+        { value: '30', label: t('settings.interval30m', '30분') },
+    ] : [
+        { value: '3', label: t('settings.interval3s', '3초') },
+        { value: '5', label: t('settings.interval5s', '5초') },
+        { value: '7', label: t('settings.interval7s', '7초') },
+        { value: '10', label: t('settings.interval10s', '10초') },
+        { value: '15', label: t('settings.interval15s', '15초') },
+    ];
+
+    const handleBatterySavingToggle = (checked: boolean) => {
+        setBatterySavingMode(checked);
+        localStorage.setItem(BATTERY_SAVING_MODE_KEY, checked.toString());
+        if (checked) {
+            setFrequency('1');
+        }
+        invoke('set_battery_saving_mode', { mode: checked }).catch(console.error);
+    };
 
     return (
         <Card>
@@ -103,27 +149,30 @@ const DetectionSettings = () => {
             <CardContent className="space-y-6">
                 <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <span className="font-medium">{t('settings.monitoringInterval', '모니터링 주기')}</span>
-                      <p className="text-sm text-muted-foreground">{t('settings.monitoringIntervalDesc', '자세를 분석하는 시간 간격을 설정합니다.')}</p>
+                       <span className="font-medium">{t('settings.batterySavingMode', '배터리 절약 모드')}</span>
+                       <p className="text-sm text-muted-foreground">{t('settings.batterySavingModeDesc', '활성화 시 모니터링 주기를 분단위로 변경하고 카메라를 절약 모드로 운영합니다.')}</p>
+                    </div>
+                    <Switch checked={batterySavingMode} onCheckedChange={handleBatterySavingToggle} />
+                </div>
+                <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                       <span className="font-medium">{t('settings.monitoringInterval', '모니터링 주기')}</span>
+                       <p className="text-sm text-muted-foreground">{t('settings.monitoringIntervalDesc', '자세를 분석하는 시간 간격을 설정합니다.')}</p>
                     </div>
                     <Select value={monitoringInterval} onValueChange={setMonitoringInterval}>
                         <SelectTrigger className="w-[250px]"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="3">{t('settings.interval3s', '3초')}</SelectItem>
-                            <SelectItem value="5">{t('settings.interval5s', '5초')}</SelectItem>
-                            <SelectItem value="7">{t('settings.interval7s', '7초')}</SelectItem>
-                            <SelectItem value="10">{t('settings.interval10s', '10초')}</SelectItem>
-                            <SelectItem value="15">{t('settings.interval15s', '15초')}</SelectItem>
+                            {monitoringOptions.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
                         </SelectContent>
                     </Select>
                 </div>
 
                 <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <span className="font-medium">{t('settings.notificationFrequency', '알림 빈도')}</span>
-                      <p className="text-sm text-muted-foreground">{t('settings.notificationFrequencyDesc', '최근 3번의 감지 중 몇 번 이상 나쁜 자세가 감지되면 알림을 받을지 설정합니다.')}</p>
+                       <span className="font-medium">{t('settings.notificationFrequency', '알림 빈도')}</span>
+                       <p className="text-sm text-muted-foreground">{batterySavingMode ? t('settings.notificationFrequencyDescBatterySaving', '배터리 절약 모드에서는 1번으로 고정됩니다.') : t('settings.notificationFrequencyDescNormal', '최근 3번의 감지 중 몇 번 이상 나쁜 자세가 감지되면 알림을 받을지 설정합니다.')}</p>
                     </div>
-                    <Select value={frequency} onValueChange={setFrequency}>
+                    <Select value={frequency} onValueChange={setFrequency} disabled={batterySavingMode}>
                         <SelectTrigger className="w-[250px]"><SelectValue /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="1">{t('settings.frequencyOnce', '1번 (민감)')}</SelectItem>
@@ -186,7 +235,7 @@ const CameraSettings = () => {
                 }
 
             } catch (error) {
-                console.error("백엔드로부터 카메라 목록을 가져오는 중 오류 발생:", error);
+                console.error(t('settings.cameraErrorGetList', '백엔드로부터 카메라 목록을 가져오는 중 오류 발생:'), error);
             }
         };
 
@@ -199,7 +248,7 @@ const CameraSettings = () => {
         localStorage.setItem(CAMERA_INDEX_KEY, value);
         
         invoke('set_selected_camera', { index: newIndex })
-            .catch(e => console.error("선택된 카메라를 백엔드에 설정하는 중 오류 발생:", e));
+            .catch(e => console.error(t('settings.cameraErrorSetSelected', '선택된 카메라를 백엔드에 설정하는 중 오류 발생:'), e));
     };
 
     const openCameraSettings = async () => {
@@ -210,11 +259,11 @@ const CameraSettings = () => {
             } else if (osPlatform === 'windows') {
                 await open('ms-settings:privacy-webcam');
             } else {
-                alert('시스템 설정 > 개인 정보 보호 및 보안 > 카메라에서 앱 권한을 직접 허용해주세요.');
+                alert(t('settings.cameraPermissionDirect', '시스템 설정 > 개인 정보 보호 및 보안 > 카메라에서 앱 권한을 직접 허용해주세요.'));
             }
         } catch (error) {
-             console.error("설정 창을 여는 중 오류 발생:", error);
-             alert("설정 창을 열 수 없습니다. 수동으로 시스템 설정 > 개인 정보 보호 및 보안 > 카메라로 이동하여 권한을 확인해주세요.");
+              console.error(t('settings.settingsErrorOpen', '설정 창을 여는 중 오류 발생:'), error);
+              alert(t('settings.cameraPermissionManual', '설정 창을 열 수 없습니다. 수동으로 시스템 설정 > 개인 정보 보호 및 보안 > 카메라로 이동하여 권한을 확인해주세요.'));
         }
     };
 
@@ -305,7 +354,7 @@ const UpdateSettings = () => {
                 setIsChecking(false);
             }
         } catch (error) {
-            console.error('업데이트 확인 실패:', error);
+            console.error(t('settings.updateErrorCheck', '업데이트 확인 실패:'), error);
             setIsChecking(false);
             setIsDownloading(false);
             setIsInstalling(false);
@@ -316,8 +365,8 @@ const UpdateSettings = () => {
         try {
             await invoke('restart_app');
         } catch (error) {
-            console.error('앱 재시작 실패:', error);
-            alert('앱을 수동으로 재시작해주세요.');
+            console.error(t('settings.appErrorRestart', '앱 재시작 실패:'), error);
+            alert(t('settings.appRestartManual', '앱을 수동으로 재시작해주세요.'));
         }
     };
 
@@ -416,11 +465,11 @@ const NotificationSettings = () => {
             } else if (osPlatform === 'windows') {
                 await open('ms-settings:notifications');
             } else {
-                alert('시스템 설정 > 알림에서 앱의 알림 권한을 직접 허용해주세요.');
+                alert(t('settings.notificationPermissionDirect', '시스템 설정 > 알림에서 앱의 알림 권한을 직접 허용해주세요.'));
             }
         } catch (error) {
-            console.error("알림 설정 창을 여는 중 오류 발생:", error);
-            alert("설정 창을 열 수 없습니다. 수동으로 시스템 설정 > 알림으로 이동하여 권한을 확인해주세요.");
+            console.error(t('settings.notificationErrorOpen', '알림 설정 창을 여는 중 오류 발생:'), error);
+            alert(t('settings.notificationPermissionManual', '설정 창을 열 수 없습니다. 수동으로 시스템 설정 > 알림으로 이동하여 권한을 확인해주세요.'));
         }
     };
 
